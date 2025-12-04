@@ -114,7 +114,7 @@ export const getProduct = async (req, res) => {
 
     // Check if it's a MongoDB ObjectId (24 hex characters)
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(identifier);
-    
+
     let product;
     if (isObjectId) {
       // Search by ID (for admin routes)
@@ -193,7 +193,8 @@ export const createProduct = async (req, res) => {
     // Handle images from upload
     if (req.files && req.files.length > 0) {
       productData.images = req.files.map(file => ({
-        url: `/uploads/${file.filename}`,
+        data: file.buffer.toString('base64'),
+        contentType: file.mimetype,
         alt: productData.name,
         altAr: productData.nameAr
       }));
@@ -239,7 +240,8 @@ export const updateProduct = async (req, res) => {
     // Handle new images (only if files are uploaded)
     if (req.files && req.files.length > 0) {
       const newImages = req.files.map(file => ({
-        url: `/uploads/${file.filename}`,
+        data: file.buffer.toString('base64'),
+        contentType: file.mimetype,
         alt: req.body.name || product.name,
         altAr: req.body.nameAr || product.nameAr
       }));
@@ -251,8 +253,8 @@ export const updateProduct = async (req, res) => {
     const updatedProduct = await Product.findByIdAndUpdate(
       id,
       updateData,
-      { 
-        new: true, 
+      {
+        new: true,
         runValidators: true,
         // Only validate fields that are being updated
         setDefaultsOnInsert: false
@@ -301,7 +303,7 @@ export const deleteProduct = async (req, res) => {
 
     // Always hard delete (permanently delete from database)
     await Product.findByIdAndDelete(id);
-    
+
     res.json({
       success: true,
       message: 'Product permanently deleted successfully'

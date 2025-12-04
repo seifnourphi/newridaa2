@@ -48,14 +48,14 @@ export const validateCoupon = async (req, res) => {
     } else {
       discount = coupon.discountValue;
     }
-    
+
     if (orderAmount) {
       discount = Math.min(discount, orderAmount);
     }
 
     // Normalize discountType for frontend (PERCENTAGE/FIXED instead of percentage/fixed)
     const normalizedDiscountType = coupon.discountType === 'percentage' ? 'PERCENTAGE' : 'FIXED';
-    
+
     res.json({
       valid: true,
       coupon: {
@@ -93,13 +93,17 @@ export const uploadPaymentProof = async (req, res) => {
       });
     }
 
-    // Return the file URL
-    const fileUrl = `/uploads/payment-proofs/${req.file.filename}`;
-    
+    // Return the Base64 encoded file
+    const paymentProof = {
+      data: req.file.buffer.toString('base64'),
+      contentType: req.file.mimetype
+    };
+
     res.json({
       success: true,
-      url: fileUrl,
-      filename: req.file.filename
+      paymentProof,
+      data: paymentProof.data,
+      contentType: paymentProof.contentType
     });
   } catch (error) {
     console.error('Upload payment proof error:', error);
@@ -239,8 +243,8 @@ export const validateStock = async (req, res) => {
       success: true,
       valid: allValid,
       results: validationResults,
-      message: allValid 
-        ? 'All items are available in stock' 
+      message: allValid
+        ? 'All items are available in stock'
         : 'Some items are not available in the requested quantity'
     });
   } catch (error) {

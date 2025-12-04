@@ -6,7 +6,7 @@ import User from '../models/User.model.js';
 export const getProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -20,12 +20,12 @@ export const getProfile = async (req, res) => {
     const lastName = nameParts.slice(1).join(' ') || '';
 
     // Get default address or first address
-    const defaultAddress = user.addresses && user.addresses.length > 0 
+    const defaultAddress = user.addresses && user.addresses.length > 0
       ? (user.addresses.find(addr => addr.isDefault) || user.addresses[0])
       : null;
-    
+
     // Convert address object to string for frontend compatibility
-    const addressString = defaultAddress 
+    const addressString = defaultAddress
       ? (defaultAddress.address || '')
       : '';
 
@@ -44,7 +44,7 @@ export const getProfile = async (req, res) => {
         emailVerified = true;
       }
     }
-    
+
     // Ensure emailVerified is always true in response if user is logged in
     if (!emailVerified && user.isActive) {
       emailVerified = true;
@@ -97,7 +97,7 @@ export const updateProfile = async (req, res) => {
     });
 
     const user = await User.findById(req.user.userId);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -110,15 +110,15 @@ export const updateProfile = async (req, res) => {
       const currentNameParts = (user.name || '').split(' ');
       const currentFirstName = currentNameParts[0] || '';
       const currentLastName = currentNameParts.slice(1).join(' ') || '';
-      
+
       // Use new values if provided and not empty, otherwise keep current values
-      const newFirstName = (firstName !== undefined && firstName !== null && String(firstName).trim() !== '') 
-        ? String(firstName).trim() 
+      const newFirstName = (firstName !== undefined && firstName !== null && String(firstName).trim() !== '')
+        ? String(firstName).trim()
         : currentFirstName;
-      const newLastName = (lastName !== undefined && lastName !== null && String(lastName).trim() !== '') 
-        ? String(lastName).trim() 
+      const newLastName = (lastName !== undefined && lastName !== null && String(lastName).trim() !== '')
+        ? String(lastName).trim()
         : currentLastName;
-      
+
       // Validate name length (professional limit: 25 characters per part)
       if (newFirstName.length > 25) {
         return res.status(400).json({
@@ -126,17 +126,17 @@ export const updateProfile = async (req, res) => {
           error: 'First name must not exceed 25 characters'
         });
       }
-      
+
       if (newLastName.length > 25) {
         return res.status(400).json({
           success: false,
           error: 'Last name must not exceed 25 characters'
         });
       }
-      
+
       // Combine firstName and lastName
       const combinedName = `${newFirstName} ${newLastName}`.trim();
-      
+
       // Validate total name length
       if (combinedName.length > 60) {
         return res.status(400).json({
@@ -144,7 +144,7 @@ export const updateProfile = async (req, res) => {
           error: 'Full name must not exceed 60 characters'
         });
       }
-      
+
       if (combinedName) {
         user.name = combinedName;
         console.log('Updated name:', user.name);
@@ -167,7 +167,7 @@ export const updateProfile = async (req, res) => {
       if (address && typeof address === 'object' && address !== null) {
         // If address is an object, update or add it
         const existingIndex = user.addresses.findIndex(addr => addr.isDefault);
-        
+
         if (existingIndex >= 0) {
           // Update existing default address
           user.addresses[existingIndex] = {
@@ -193,9 +193,9 @@ export const updateProfile = async (req, res) => {
           postalCode: '',
           isDefault: true
         };
-        
+
         console.log('Converting string address to object:', addressObj);
-        
+
         if (existingIndex >= 0) {
           // Update existing default address
           user.addresses[existingIndex] = {
@@ -221,7 +221,7 @@ export const updateProfile = async (req, res) => {
     }
 
     await user.save();
-    
+
     // Log saved addresses for debugging
     console.log('User addresses after save:', JSON.stringify(user.addresses, null, 2));
 
@@ -231,12 +231,12 @@ export const updateProfile = async (req, res) => {
     const responseLastName = nameParts.slice(1).join(' ') || '';
 
     // Get default address or first address
-    const defaultAddress = user.addresses && user.addresses.length > 0 
+    const defaultAddress = user.addresses && user.addresses.length > 0
       ? (user.addresses.find(addr => addr.isDefault) || user.addresses[0])
       : null;
-    
+
     // Convert address object to string for frontend compatibility
-    const addressString = defaultAddress 
+    const addressString = defaultAddress
       ? (defaultAddress.address || '')
       : '';
 
@@ -283,7 +283,7 @@ export const uploadAvatar = async (req, res) => {
     }
 
     const user = await User.findById(req.user.userId);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -291,18 +291,16 @@ export const uploadAvatar = async (req, res) => {
       });
     }
 
-    // Get the file path and create URL
-    const filePath = req.file.path;
-    const uploadsDir = filePath.includes('avatars') ? '/uploads/avatars' : '/uploads';
-    const avatarUrl = `${uploadsDir}/${req.file.filename}`;
-
-    // Update user avatar
-    user.avatar = avatarUrl;
+    // Convert uploaded file to Base64
+    user.avatar = {
+      data: req.file.buffer.toString('base64'),
+      contentType: req.file.mimetype
+    };
     await user.save();
 
     res.json({
       success: true,
-      avatarUrl: avatarUrl,
+      avatar: user.avatar,
       message: 'Avatar uploaded successfully'
     });
   } catch (error) {
@@ -330,7 +328,7 @@ export const deleteAccount = async (req, res) => {
 
     // Find user with password field
     const user = await User.findById(req.user.userId).select('+password');
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,

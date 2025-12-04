@@ -20,7 +20,10 @@ const categorySchema = new mongoose.Schema({
   },
   description: String,
   descriptionAr: String,
-  image: String,
+  image: {
+    data: String,
+    contentType: String
+  },
   parent: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category',

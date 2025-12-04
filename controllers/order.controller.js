@@ -12,13 +12,13 @@ import { sendOrderNotification, sendLowStockAlert, sendOrderStatusUpdateNotifica
 export const createOrder = async (req, res) => {
   try {
     // Support both old format (shippingAddress object) and new format (individual fields)
-    const { 
-      items, 
-      shippingAddress, 
-      billingAddress, 
-      shippingPrice, 
-      couponCode, 
-      paymentMethod, 
+    const {
+      items,
+      shippingAddress,
+      billingAddress,
+      shippingPrice,
+      couponCode,
+      paymentMethod,
       paymentProof,
       paymentProofUrl,
       // New format fields
@@ -34,7 +34,7 @@ export const createOrder = async (req, res) => {
       codAmount,
       shippingPaymentMethod
     } = req.body;
-    
+
     // Validate required fields
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
@@ -61,11 +61,14 @@ export const createOrder = async (req, res) => {
         error: 'Shipping address is required'
       });
     }
-    
-    // Handle payment proof (from file upload or URL)
-    let paymentProofUrlFinal = paymentProofUrl || paymentProof || '';
+
+    // Handle payment proof (from file upload)
+    let paymentProofData = null;
     if (req.file) {
-      paymentProofUrlFinal = `/uploads/payment-proofs/${req.file.filename}`;
+      paymentProofData = {
+        data: req.file.buffer.toString('base64'),
+        contentType: req.file.mimetype
+      };
     }
 
     // Calculate subtotal
@@ -98,7 +101,7 @@ export const createOrder = async (req, res) => {
         quantity: item.quantity,
         size: item.selectedSize || item.size || null,
         color: item.selectedColor || item.color || null,
-        image: product.images?.[0]?.url || (typeof product.images?.[0] === 'string' ? product.images[0] : '') || ''
+        image: product.images?.[0] || null
       });
     }
 
@@ -154,7 +157,7 @@ export const createOrder = async (req, res) => {
       total,
       paymentMethod: finalPaymentMethod,
       shippingPaymentMethod: shippingPaymentMethod || null,
-      paymentProof: paymentProofUrlFinal,
+      paymentProof: paymentProofData,
       notes: notes || null
     });
 
@@ -171,7 +174,7 @@ export const createOrder = async (req, res) => {
         { $inc: { stockQuantity: -item.quantity } },
         { new: true }
       );
-      
+
       // Check for low stock alert (if stock is 5 or less)
       if (updatedProduct && updatedProduct.stockQuantity <= 5) {
         try {
@@ -195,7 +198,7 @@ export const createOrder = async (req, res) => {
           price: item.price
         }))
       };
-      
+
       // Send notification asynchronously (don't wait for it)
       sendOrderNotification(orderForNotification, 'ar').catch(err => {
         console.error('Error sending order notification (non-blocking):', err);
@@ -232,7 +235,7 @@ export const getOrders = async (req, res) => {
 
     const query = { user: req.user.userId };
     const { status } = req.query;
-    
+
     if (status && status !== 'all') {
       query.orderStatus = status;
     }
@@ -356,12 +359,12 @@ export const trackOrderByQuery = async (req, res) => {
     const query = {};
     const searchTerms = [];
     const usedValues = new Set(); // To avoid duplicate search terms
-    
+
     // Helper function to add search terms without duplicates
     const addSearchTerms = (value) => {
       if (!value || usedValues.has(value)) return;
       usedValues.add(value);
-      
+
       const cleanValue = value.split(':')[0].trim();
       if (cleanValue !== value && !usedValues.has(cleanValue)) {
         usedValues.add(cleanValue);
@@ -371,30 +374,30 @@ export const trackOrderByQuery = async (req, res) => {
           { orderReference: cleanValue }
         );
       }
-      
+
       searchTerms.push(
         { trackingNumber: value },
         { orderNumber: value },
         { orderReference: value }
       );
     };
-    
+
     // Add search terms from both tracking and order parameters
     if (tracking) {
       addSearchTerms(tracking);
     }
-    
+
     if (orderNumber) {
       addSearchTerms(orderNumber);
     }
-    
+
     if (searchTerms.length === 0) {
       return res.status(400).json({
         success: false,
         error: 'Please provide either tracking number or order number'
       });
     }
-    
+
     // Use $or to search in all possible fields
     query.$or = searchTerms;
 
@@ -535,9 +538,9 @@ export const getOrderInvoice = async (req, res) => {
     // Support both admin token (req.admin) and user token (req.user)
     const userInfo = req.admin || req.user;
     const isAdmin = userInfo?.role === 'admin' || userInfo?.type === 'admin';
-    const isOwner = order.user?._id?.toString() === userInfo?.userId?.toString() || 
-                    order.user?._id?.toString() === userInfo?.id?.toString();
-    
+    const isOwner = order.user?._id?.toString() === userInfo?.userId?.toString() ||
+      order.user?._id?.toString() === userInfo?.id?.toString();
+
     if (!isAdmin && !isOwner) {
       return res.status(403).json({
         success: false,
@@ -553,8 +556,8 @@ export const getOrderInvoice = async (req, res) => {
         try {
           const settingsDoc = await Settings.findOne({ key: 'store' });
           if (settingsDoc?.value) {
-            const parsedSettings = typeof settingsDoc.value === 'string' 
-              ? JSON.parse(settingsDoc.value) 
+            const parsedSettings = typeof settingsDoc.value === 'string'
+              ? JSON.parse(settingsDoc.value)
               : settingsDoc.value;
             storeSettings = {
               instaPayNumber: parsedSettings.instaPayNumber || '',
@@ -675,9 +678,9 @@ export const updateAdminOrder = async (req, res) => {
     const { id } = req.params;
     // Handle both full order ID and item-specific ID (format: orderId-itemIndex)
     const orderId = id.includes('-') ? id.split('-')[0] : id;
-    
+
     const { status, orderStatus, trackingNumber, cancellationReason } = req.body;
-    
+
     // Use status or orderStatus (frontend might send either)
     const finalStatus = status || orderStatus;
 
@@ -695,17 +698,17 @@ export const updateAdminOrder = async (req, res) => {
     // Update order status
     if (finalStatus) {
       let normalizedStatus = finalStatus.toLowerCase();
-      
+
       // Map frontend status values to database enum values
       const statusMap = {
         'processing': 'confirmed', // Map PROCESSING to confirmed
       };
-      
+
       // Apply mapping if needed
       if (statusMap[normalizedStatus]) {
         normalizedStatus = statusMap[normalizedStatus];
       }
-      
+
       // Validate against enum values
       const validStatuses = ['pending', 'confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
       if (validStatuses.includes(normalizedStatus)) {
@@ -717,12 +720,12 @@ export const updateAdminOrder = async (req, res) => {
         });
       }
     }
-    
+
     // Update tracking number
     if (trackingNumber !== undefined) {
       order.trackingNumber = trackingNumber;
     }
-    
+
     // Update cancellation reason if provided
     if (cancellationReason !== undefined) {
       order.cancelledReason = cancellationReason;
@@ -743,7 +746,7 @@ export const updateAdminOrder = async (req, res) => {
           orderStatus: order.orderStatus,
           trackingNumber: order.trackingNumber
         };
-        
+
         sendOrderStatusUpdateNotification(orderForNotification, oldStatus, order.orderStatus, 'ar').catch(err => {
           console.error('Error sending order status update notification (non-blocking):', err);
         });
@@ -833,7 +836,7 @@ export const getAdminOrders = async (req, res) => {
     if (date && date !== 'all') {
       const now = new Date();
       let startDate;
-      
+
       switch (date) {
         case 'today':
           startDate = new Date(now.setHours(0, 0, 0, 0));
@@ -850,7 +853,7 @@ export const getAdminOrders = async (req, res) => {
         default:
           startDate = null;
       }
-      
+
       if (startDate) {
         query.createdAt = { $gte: startDate };
       }
@@ -873,17 +876,17 @@ export const getAdminOrders = async (req, res) => {
     // The frontend expects each item in items array to be a separate order entry
     // So we flatten the order items into individual order entries
     const transformedOrders = [];
-    
+
     orders.forEach(order => {
       const totalItems = order.items.length;
       // Calculate shipping and discount per item (for display, frontend will sum them)
       const shippingPerItem = totalItems > 0 ? (order.shippingPrice || 0) / totalItems : 0;
       const discountPerItem = totalItems > 0 ? (order.discount || 0) / totalItems : 0;
-      
+
       // If order has multiple items, create an entry for each item
       order.items.forEach((item, itemIndex) => {
         const itemTotalPrice = (item.price || 0) * (item.quantity || 0);
-        
+
         // Handle product images - support both array of objects and array of strings
         let productImages = [];
         if (item.product?.images) {
@@ -928,12 +931,12 @@ export const getAdminOrders = async (req, res) => {
           paymentProof: order.paymentProof || null,
           // Send relative path for paymentProofUrl so Next.js rewrite can handle it
           // Extract relative path if paymentProof contains full URL
-          paymentProofUrl: order.paymentProof 
-            ? (order.paymentProof.startsWith('http') 
-                ? order.paymentProof.replace(/^https?:\/\/[^\/]+/, '') // Extract path from full URL
-                : order.paymentProof.startsWith('/') 
-                  ? order.paymentProof 
-                  : `/${order.paymentProof}`)
+          paymentProofUrl: order.paymentProof
+            ? (order.paymentProof.startsWith('http')
+              ? order.paymentProof.replace(/^https?:\/\/[^\/]+/, '') // Extract path from full URL
+              : order.paymentProof.startsWith('/')
+                ? order.paymentProof
+                : `/${order.paymentProof}`)
             : null,
           notes: order.notes || null,
           selectedSize: item.size || null,

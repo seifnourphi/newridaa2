@@ -10,20 +10,17 @@ export const uploadFile = async (req, res) => {
       });
     }
 
-    // Return the file URL
-    // Check if file is in a subdirectory (e.g., avatars, logos)
-    const filePath = req.file.path;
-    const uploadsDir = filePath.includes('avatars') ? '/uploads/avatars' :
-                      filePath.includes('logos') ? '/uploads/logos' :
-                      filePath.includes('payment-proofs') ? '/uploads/payment-proofs' :
-                      '/uploads';
-    
-    const fileUrl = `${uploadsDir}/${req.file.filename}`;
-    
+    // Return the Base64 encoded file
+    const fileData = {
+      data: req.file.buffer.toString('base64'),
+      contentType: req.file.mimetype
+    };
+
     res.json({
       success: true,
-      url: fileUrl,
-      filename: req.file.filename
+      file: fileData,
+      data: fileData.data,
+      contentType: fileData.contentType
     });
   } catch (error) {
     res.status(500).json({

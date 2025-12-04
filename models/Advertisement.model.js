@@ -1,7 +1,11 @@
 import mongoose from 'mongoose';
 
 const advertisementImageSchema = new mongoose.Schema({
-  url: {
+  data: {
+    type: String,
+    required: true
+  },
+  contentType: {
     type: String,
     required: true
   },
@@ -47,8 +51,8 @@ const advertisementSchema = new mongoose.Schema({
   buttonText: String,
   buttonTextAr: String,
   image: {
-    type: String,
-    default: '/uploads/good.png' // Default placeholder image
+    data: String,
+    contentType: String
   },
   price: Number,
   originalPrice: Number,

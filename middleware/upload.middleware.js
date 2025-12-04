@@ -12,38 +12,8 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Configure storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    let uploadPath = uploadDir;
-    
-    // Organize by type
-    if (file.fieldname === 'avatar') {
-      uploadPath = path.join(uploadDir, 'avatars');
-    } else if (file.fieldname === 'paymentProof' || file.fieldname === 'file') {
-      // Handle both 'paymentProof' and 'file' field names for payment proof uploads
-      uploadPath = path.join(uploadDir, 'payment-proofs');
-    } else if (file.fieldname === 'logo') {
-      uploadPath = path.join(uploadDir, 'logos');
-    } else {
-      uploadPath = uploadDir;
-    }
-    
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath, { recursive: true });
-    }
-    
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    // Generate unique filename
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9]/g, '-');
-    cb(null, `${uniqueSuffix}-${name}${ext}`);
-  }
-});
+// Configure storage - use memory storage for Base64 conversion
+const storage = multer.memoryStorage();
 
 // File filter
 const fileFilter = (req, file, cb) => {

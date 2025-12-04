@@ -71,7 +71,11 @@ const productSchema = new mongoose.Schema({
   originalPrice: Number,
   discountPercent: Number,
   images: [{
-    url: {
+    data: {
+      type: String,
+      required: true
+    },
+    contentType: {
       type: String,
       required: true
     },

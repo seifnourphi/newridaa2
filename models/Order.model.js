@@ -15,7 +15,10 @@ const orderItemSchema = new mongoose.Schema({
   },
   size: String,
   color: String,
-  image: String
+  image: {
+    data: String,
+    contentType: String
+  }
 }, { _id: false });
 
 const orderSchema = new mongoose.Schema({
@@ -83,7 +86,10 @@ const orderSchema = new mongoose.Schema({
     enum: ['pending', 'paid', 'failed', 'refunded'],
     default: 'pending'
   },
-  paymentProof: String,
+  paymentProof: {
+    data: String,
+    contentType: String
+  },
   orderStatus: {
     type: String,
     enum: ['pending', 'confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'],
@@ -98,7 +104,7 @@ const orderSchema = new mongoose.Schema({
 });
 
 // Generate order number before saving
-orderSchema.pre('save', async function(next) {
+orderSchema.pre('save', async function (next) {
   try {
     if (!this.orderNumber) {
       // Use a more reliable method to generate unique order number

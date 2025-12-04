@@ -18,7 +18,7 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: function() {
+    required: function () {
       // Password is required only if user is not signing in with Google
       return !this.googleId;
     },
@@ -48,8 +48,8 @@ const userSchema = new mongoose.Schema({
     default: false
   },
   avatar: {
-    type: String,
-    default: ''
+    data: String,
+    contentType: String
   },
   addresses: [{
     name: String,
@@ -93,7 +93,7 @@ const userSchema = new mongoose.Schema({
 });
 
 // Hash password before saving
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   // Only hash password if it exists and is modified
   if (!this.isModified('password') || !this.password) {
     return next();
@@ -103,12 +103,12 @@ userSchema.pre('save', async function(next) {
 });
 
 // Compare password method
-userSchema.methods.comparePassword = async function(candidatePassword) {
+userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
 // Remove password from JSON output
-userSchema.methods.toJSON = function() {
+userSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.password;
   delete obj.mfaSecret;
