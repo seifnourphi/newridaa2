@@ -603,8 +603,8 @@ export const getOrderInvoice = async (req, res) => {
           discount: order.discount,
           subtotal: order.subtotal,
           total: order.total,
-          customerName: order.shippingAddress?.name || '',
-          customerPhone: order.shippingAddress?.phone || '',
+          customerName: order.shippingAddress?.name || order.user?.name || '',
+          customerPhone: order.shippingAddress?.phone || order.user?.phone || '',
           customerAddress: order.shippingAddress?.address || '',
           customerEmail: order.user?.email || ''
         };

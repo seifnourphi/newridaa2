@@ -2,15 +2,16 @@ import jwt from 'jsonwebtoken';
 
 export const authenticate = (req, res, next) => {
   try {
-    // Check for token in cookies first (httpOnly cookie)
-    let token = req.cookies?.token;
-    
-    // If no cookie, check Authorization header
-    if (!token && req.headers.authorization) {
-      const authHeader = req.headers.authorization;
-      if (authHeader.startsWith('Bearer ')) {
-        token = authHeader.substring(7);
-      }
+    let token;
+
+    // Check Authorization header first (explicit override)
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.substring(7);
+    }
+
+    // If no header token, check cookies
+    if (!token && req.cookies?.token) {
+      token = req.cookies.token;
     }
 
     if (!token) {

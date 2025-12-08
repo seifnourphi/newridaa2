@@ -1,7 +1,7 @@
 // Invoice HTML Template (same as old project)
 export function generateInvoiceHTML(order, lang = 'ar', user = null, storeSettings = null, baseUrl = 'http://localhost:5000', logoDataUrl = null) {
   const isArabic = lang === 'ar';
-  
+
   // Use base64 logo if available, otherwise use URL (still used in footer)
   let logoUrl;
   if (logoDataUrl) {
@@ -9,9 +9,9 @@ export function generateInvoiceHTML(order, lang = 'ar', user = null, storeSettin
   } else {
     logoUrl = `${baseUrl}/uploads/logos/logo.png`;
   }
-  
+
   const orderDate = new Date(order.createdAt).toLocaleString(
-    isArabic ? 'ar-EG' : 'en-US', 
+    isArabic ? 'ar-EG' : 'en-US',
     {
       year: 'numeric',
       month: '2-digit',
@@ -24,7 +24,7 @@ export function generateInvoiceHTML(order, lang = 'ar', user = null, storeSettin
   // Calculate totals from all order items
   const orderItems = order.items || [];
   const subtotal = orderItems.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 0)), 0);
-  
+
   // Get shipping price
   let shipping = order.shippingPrice || 0;
   const total = subtotal + shipping - (order.discount || 0);
@@ -127,10 +127,10 @@ export function generateInvoiceHTML(order, lang = 'ar', user = null, storeSettin
   const htmlDir = isArabic ? 'rtl' : 'ltr';
   const htmlLang = isArabic ? 'ar' : 'en';
 
-  const customerName = order.shippingAddress?.name || '';
-  const customerPhone = order.shippingAddress?.phone || '';
-  const customerAddress = order.shippingAddress?.address || '';
-  const customerEmail = order.user?.email || user?.email || '';
+  const customerName = order.customerName || order.shippingAddress?.name || '';
+  const customerPhone = order.customerPhone || order.shippingAddress?.phone || '';
+  const customerAddress = order.customerAddress || order.shippingAddress?.address || '';
+  const customerEmail = order.customerEmail || order.user?.email || user?.email || '';
 
   return `
 <!DOCTYPE html>
@@ -412,11 +412,11 @@ export function generateInvoiceHTML(order, lang = 'ar', user = null, storeSettin
     </div>
 
     ${orderItems.map((item) => {
-      const productName = isArabic ? (item.product?.nameAr || item.product?.name || item.name) : (item.product?.name || item.product?.nameAr || item.name);
-      const itemUnitPrice = item.price || 0;
-      const itemQuantity = item.quantity || 1;
-      const itemTotal = itemUnitPrice * itemQuantity;
-      return `
+    const productName = isArabic ? (item.product?.nameAr || item.product?.name || item.name) : (item.product?.name || item.product?.nameAr || item.name);
+    const itemUnitPrice = item.price || 0;
+    const itemQuantity = item.quantity || 1;
+    const itemTotal = itemUnitPrice * itemQuantity;
+    return `
     <div class="table-row">
       <div>${productName || 'Product'}${item.size ? ` - ${isArabic ? 'الحجم' : 'Size'}: ${item.size}` : ''}${item.color ? ` - ${isArabic ? 'اللون' : 'Color'}: ${item.color}` : ''}</div>
       <div style="text-align: ${isArabic ? 'left' : 'right'}">${itemUnitPrice.toFixed(2)} ${isArabic ? 'ج.م' : 'EGP'}</div>
@@ -424,7 +424,7 @@ export function generateInvoiceHTML(order, lang = 'ar', user = null, storeSettin
       <div style="text-align: ${isArabic ? 'left' : 'right'}">${itemTotal.toFixed(2)} ${isArabic ? 'ج.م' : 'EGP'}</div>
     </div>
       `;
-    }).join('')}
+  }).join('')}
 
     <div class="total-row">
       <div class="total-label">${translations.subtotal}</div>

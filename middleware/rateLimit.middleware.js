@@ -129,3 +129,24 @@ export const adminLimiter = rateLimit({
   }
 });
 
+// MFA verify-login rate limiter (more lenient for login attempts)
+// Industry standard: 10-20 attempts per 15 minutes for MFA verification
+export const mfaVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 15, // 15 attempts per 15 minutes (allows for typos and retries)
+  message: {
+    success: false,
+    error: 'Too many MFA verification attempts, please try again after 15 minutes.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => isRateLimitDisabled,
+  handler: (req, res) => {
+    res.status(429).json({
+      success: false,
+      error: 'Too many MFA verification attempts, please try again after 15 minutes.',
+      retryAfter: Math.ceil((req.rateLimit.resetTime - Date.now()) / 1000)
+    });
+  }
+});
+
