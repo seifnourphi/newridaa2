@@ -100,6 +100,8 @@ export function generateInvoiceHTML(order, lang = 'ar', user = null, storeSettin
     name: 'الاسم',
     phone: 'الرقم',
     email: 'الإيميل',
+    address: 'العنوان',
+    city: 'المدينة',
     paymentMethod: 'طريقة الدفع',
     thanks: 'شكراً لك',
     thanksEn: 'Thank You',
@@ -119,6 +121,8 @@ export function generateInvoiceHTML(order, lang = 'ar', user = null, storeSettin
     name: 'Name',
     phone: 'Phone',
     email: 'Email',
+    address: 'Address',
+    city: 'City',
     paymentMethod: 'Payment Method',
     thanks: 'Thank You',
     thanksEn: 'Thank You',
@@ -130,6 +134,7 @@ export function generateInvoiceHTML(order, lang = 'ar', user = null, storeSettin
   const customerName = order.customerName || order.shippingAddress?.name || '';
   const customerPhone = order.customerPhone || order.shippingAddress?.phone || '';
   const customerAddress = order.customerAddress || order.shippingAddress?.address || '';
+  const customerCity = order.shippingAddress?.city || '';
   const customerEmail = order.customerEmail || order.user?.email || user?.email || '';
 
   return `
@@ -217,7 +222,20 @@ export function generateInvoiceHTML(order, lang = 'ar', user = null, storeSettin
     }
     .issued-to .section-content {
       max-width: 260px;
-      white-space: pre-wrap;
+    }
+    .customer-info-item {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 6px;
+      line-height: 1.8;
+    }
+    .customer-info-label {
+      font-weight: 600;
+      min-width: ${isArabic ? '60px' : '70px'};
+      flex-shrink: 0;
+    }
+    .customer-info-value {
+      flex: 1;
       word-break: break-word;
       overflow-wrap: anywhere;
     }
@@ -389,9 +407,24 @@ export function generateInvoiceHTML(order, lang = 'ar', user = null, storeSettin
       <div class="issued-to">
         <div class="section-label">${translations.issuedTo}</div>
         <div class="section-content">
-          ${customerName}<br>
-          ${customerPhone}<br>
-          ${customerAddress}
+          <div class="customer-info-item">
+            <span class="customer-info-label">${translations.name}:</span>
+            <span class="customer-info-value">${customerName}</span>
+          </div>
+          <div class="customer-info-item">
+            <span class="customer-info-label">${translations.phone}:</span>
+            <span class="customer-info-value">${customerPhone}</span>
+          </div>
+          <div class="customer-info-item">
+            <span class="customer-info-label">${translations.address}:</span>
+            <span class="customer-info-value">${customerAddress}</span>
+          </div>
+          ${customerCity ? `
+          <div class="customer-info-item">
+            <span class="customer-info-label">${translations.city}:</span>
+            <span class="customer-info-value">${customerCity}</span>
+          </div>
+          ` : ''}
         </div>
       </div>
       <div class="invoice-no">
