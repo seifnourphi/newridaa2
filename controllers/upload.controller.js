@@ -10,17 +10,25 @@ export const uploadFile = async (req, res) => {
       });
     }
 
-    // Return the Base64 encoded file
+    // Extract relative path from absolute path
+    const relativePath = req.file.path.split('uploads')[1].replace(/\\/g, '/');
+    const fileUrl = `/uploads${relativePath}`;
+
+    // Return the file information
     const fileData = {
-      data: req.file.buffer.toString('base64'),
-      contentType: req.file.mimetype
+      filename: req.file.filename,
+      path: fileUrl,
+      url: fileUrl,
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
     };
 
     res.json({
       success: true,
       file: fileData,
-      data: fileData.data,
-      contentType: fileData.contentType
+      url: fileData.url,
+      filename: fileData.filename
     });
   } catch (error) {
     res.status(500).json({

@@ -192,12 +192,15 @@ export const createProduct = async (req, res) => {
 
     // Handle images from upload
     if (req.files && req.files.length > 0) {
-      productData.images = req.files.map(file => ({
-        data: file.buffer.toString('base64'),
-        contentType: file.mimetype,
-        alt: productData.name,
-        altAr: productData.nameAr
-      }));
+      productData.images = req.files.map(file => {
+        // Extract subfolder from file path
+        const relativePath = file.path.split('uploads')[1].replace(/\\/g, '/');
+        return {
+          url: `/uploads${relativePath}`,
+          alt: productData.name,
+          altAr: productData.nameAr
+        };
+      });
     }
 
     const product = await Product.create(productData);
@@ -207,6 +210,7 @@ export const createProduct = async (req, res) => {
       data: product
     });
   } catch (error) {
+    console.error('❌ [Create Product] Error:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to create product'
@@ -239,12 +243,15 @@ export const updateProduct = async (req, res) => {
 
     // Handle new images (only if files are uploaded)
     if (req.files && req.files.length > 0) {
-      const newImages = req.files.map(file => ({
-        data: file.buffer.toString('base64'),
-        contentType: file.mimetype,
-        alt: req.body.name || product.name,
-        altAr: req.body.nameAr || product.nameAr
-      }));
+      const newImages = req.files.map(file => {
+        // Extract subfolder from file path
+        const relativePath = file.path.split('uploads')[1].replace(/\\/g, '/');
+        return {
+          url: `/uploads${relativePath}`,
+          alt: req.body.name || product.name,
+          altAr: req.body.nameAr || product.nameAr
+        };
+      });
       updateData.images = [...(product.images || []), ...newImages];
     }
 
@@ -405,6 +412,13 @@ export const getAdminProducts = async (req, res) => {
       isBestseller: product.isBestseller,
       views: product.views || 0,
       whatsappClicks: product.clicks || 0,
+      shortDescription: product.shortDescription || '',
+      shortDescriptionAr: product.shortDescriptionAr || '',
+      metaTitle: product.metaTitle || '',
+      metaTitleAr: product.metaTitleAr || '',
+      metaDescription: product.metaDescription || '',
+      metaDescriptionAr: product.metaDescriptionAr || '',
+      tags: product.tags || [],
       category: product.category ? {
         id: product.category._id.toString(),
         name: product.category.name,

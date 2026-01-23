@@ -70,6 +70,66 @@ export const getAdminCategories = async (req, res) => {
   }
 };
 
+// @desc    Get single category (Admin/Public)
+// @route   GET /api/admin/categories/:id OR /api/categories/:slug
+// @access  Private/Public
+export const getCategory = async (req, res) => {
+  try {
+    const { id, slug } = req.params;
+    const identifier = id || slug;
+
+    if (!identifier) {
+      return res.status(400).json({
+        success: false,
+        error: 'Category identifier is required'
+      });
+    }
+
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(identifier);
+
+    let category;
+    if (isObjectId) {
+      category = await Category.findById(identifier).lean();
+    } else {
+      category = await Category.findOne({ slug: identifier }).lean();
+    }
+
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        error: 'Category not found'
+      });
+    }
+
+    const normalized = {
+      id: category._id.toString(),
+      name: category.name,
+      nameAr: category.nameAr || category.name,
+      slug: category.slug,
+      description: category.description || '',
+      descriptionAr: category.descriptionAr || '',
+      image: category.image || null,
+      parentId: category.parent ? category.parent.toString() : null,
+      isActive: category.isActive !== false,
+      sortOrder: category.sortOrder || 0,
+    };
+
+    res.json({
+      success: true,
+      data: {
+        category: normalized,
+      },
+      category: normalized
+    });
+  } catch (error) {
+    console.error('Get category error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch category',
+    });
+  }
+};
+
 // @desc    Create category (Admin)
 // @route   POST /api/admin/categories
 // @access  Private/Admin
@@ -144,7 +204,7 @@ export const createCategory = async (req, res) => {
     });
   } catch (error) {
     console.error('Create category error:', error);
-    
+
     // Handle duplicate key error
     if (error.code === 11000) {
       return res.status(400).json({
@@ -237,7 +297,7 @@ export const updateCategory = async (req, res) => {
     });
   } catch (error) {
     console.error('Update category error:', error);
-    
+
     // Handle duplicate key error
     if (error.code === 11000) {
       return res.status(400).json({

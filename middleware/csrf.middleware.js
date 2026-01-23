@@ -1,8 +1,5 @@
 import crypto from 'crypto';
 
-// Name of the CSRF cookie as set by the frontend Next.js app
-const CSRF_COOKIE_NAME = 'csrfToken';
-
 // Middleware to verify CSRF token using double-submit cookie pattern
 export const verifyCSRF = (req, res, next) => {
   try {
@@ -12,26 +9,32 @@ export const verifyCSRF = (req, res, next) => {
       return next();
     }
 
-    const cookieToken = req.cookies?.[CSRF_COOKIE_NAME];
+    // Determine cookie name based on route
+    // Admin routes are prefixed with /api/admin or are handled by adminRoutes
+    const isAdminPath = req.baseUrl.includes('/admin') || req.path.includes('/admin') || req.baseUrl.includes('/upload') || req.path.includes('/upload');
+    const cookieName = isAdminPath ? 'adminCsrfToken' : 'csrfToken';
+
+    const cookieToken = req.cookies?.[cookieName];
     const headerToken = req.headers['x-csrf-token'] || req.headers['X-CSRF-Token'];
     const bodyToken = req.body?.csrfToken;
     const queryToken = req.query?.csrfToken;
 
     const requestToken = (headerToken || bodyToken || queryToken || '').toString();
 
-    // Debug logging (remove in production)
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[CSRF Debug]', {
+    // Debug logging for CSRF
+    if (process.env.NODE_ENV !== 'production' || req.query.debug === 'true') {
+      console.log('🛡️ CSRF Verification Check:', {
+        url: req.originalUrl,
         method: req.method,
         hasCookie: !!cookieToken,
         hasHeader: !!headerToken,
         hasBody: !!bodyToken,
         hasQuery: !!queryToken,
-        cookieLength: cookieToken?.length || 0,
-        requestTokenLength: requestToken?.length || 0,
+        tokensMatch: cookieToken === requestToken
       });
     }
 
+    // Simplified check for performance
     if (!cookieToken || !requestToken) {
       return res.status(403).json({
         success: false,

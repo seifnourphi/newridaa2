@@ -87,8 +87,10 @@ const orderSchema = new mongoose.Schema({
     default: 'pending'
   },
   paymentProof: {
-    data: String,
-    contentType: String
+    data: String,        // Base64 data (legacy)
+    contentType: String, // MIME type (legacy)
+    url: String,         // File URL (new)
+    filename: String     // Original filename (new)
   },
   orderStatus: {
     type: String,
@@ -103,15 +105,23 @@ const orderSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Generate order number before saving
+// Generate order number and tracking number before saving
 orderSchema.pre('save', async function (next) {
   try {
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 10000);
+
     if (!this.orderNumber) {
       // Use a more reliable method to generate unique order number
-      const timestamp = Date.now();
-      const random = Math.floor(Math.random() * 10000);
       this.orderNumber = `ORD-${timestamp}-${String(random).padStart(4, '0')}`;
     }
+
+    // Auto-generate tracking number if not exists
+    if (!this.trackingNumber) {
+      const trackingRandom = Math.floor(Math.random() * 100000);
+      this.trackingNumber = `TRK-${timestamp}-${String(trackingRandom).padStart(5, '0')}`;
+    }
+
     next();
   } catch (error) {
     next(error);

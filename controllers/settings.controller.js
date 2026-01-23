@@ -10,19 +10,19 @@ export const getAdminSettings = async (req, res) => {
   try {
     // Get admin profile
     const admin = await Admin.findById(req.admin.adminId).select('username email');
-    
+
     // Get store settings
     const storeSettings = await Settings.findOne({ key: 'store' });
-    
+
     // Get security settings
     const securitySettings = await Settings.findOne({ key: 'security' });
-    
+
     // Get notification settings
     const notificationSettings = await Settings.findOne({ key: 'notifications' });
-    
+
     // Get SEO settings
     const seoSettings = await Settings.findOne({ key: 'seo' });
-    
+
     // Get Pages Content settings
     const pagesContentSettings = await Settings.findOne({ key: 'pagesContent' });
 
@@ -84,6 +84,7 @@ export const getAdminSettings = async (req, res) => {
 
     const defaultPagesContentSettings = {
       contact: {
+        enabled: true,
         heroTitleAr: 'اتصل بنا',
         heroTitleEn: 'Contact Us',
         heroDescriptionAr: 'نحن هنا لمساعدتك في أي وقت. تواصل معنا وسنكون سعداء لخدمتك',
@@ -103,7 +104,12 @@ export const getAdminSettings = async (req, res) => {
         whatsappButtonTextAr: 'ابدأ المحادثة',
         whatsappButtonTextEn: 'Start Chat',
         whatsappMessageAr: 'مرحباً، أريد الاستفسار عن المنتجات',
-        whatsappMessageEn: 'Hello, I want to inquire about products'
+        whatsappMessageEn: 'Hello, I want to inquire about products',
+        facebookUrl: '',
+        facebookDescriptionAr: 'تواصل معنا عبر صفحتنا الرسمية على فيسبوك.',
+        facebookDescriptionEn: 'Connect with us through our official Facebook page.',
+        facebookButtonTextAr: 'أرسل لنا رسالة',
+        facebookButtonTextEn: 'Send us a message'
       },
       about: {
         heroTitleAr: 'من نحن',
@@ -148,6 +154,18 @@ export const getAdminSettings = async (req, res) => {
             titleEn: 'Nationwide Delivery',
             descriptionAr: 'توصيل سريع وآمن لجميع محافظات مصر',
             descriptionEn: 'Fast, reliable delivery to all governorates in Egypt'
+          },
+          {
+            titleAr: 'تسوق آمن',
+            titleEn: 'Secure Shopping',
+            descriptionAr: 'طرق دفع آمنة وحماية كاملة لبياناتك',
+            descriptionEn: 'Secure payment methods and full data protection'
+          },
+          {
+            titleAr: 'دعم مستمر',
+            titleEn: '24/7 Support',
+            descriptionAr: 'فريقنا متاح دائماً للإجابة على استفساراتك',
+            descriptionEn: 'Our team is always available to answer your inquiries'
           }
         ],
         missionTitleAr: 'مهمتنا',
@@ -168,6 +186,7 @@ export const getAdminSettings = async (req, res) => {
         ctaButton2TextEn: 'Contact Us'
       },
       terms: {
+        enabled: true,
         heroTitleAr: 'الشروط وسياسة الخصوصية',
         heroTitleEn: 'Terms & Privacy Policy',
         heroDescriptionAr: 'اقرأ شروط الاستخدام وسياسة الخصوصية الخاصة بنا',
@@ -338,6 +357,27 @@ export const getAdminSettings = async (req, res) => {
       }
     }
 
+    // Deep merge about section to ensure features array has all items
+    if (parsedPagesContentSettings.about) {
+      parsedPagesContentSettings.about = {
+        ...defaultPagesContentSettings.about,
+        ...parsedPagesContentSettings.about
+      };
+
+      // Ensure features array has at least the default number of items
+      const defaultFeatures = defaultPagesContentSettings.about.features || [];
+      const currentFeatures = parsedPagesContentSettings.about.features || [];
+
+      if (currentFeatures.length < defaultFeatures.length) {
+        // Merge: keep existing features and add missing ones from defaults
+        const mergedFeatures = [...currentFeatures];
+        for (let i = currentFeatures.length; i < defaultFeatures.length; i++) {
+          mergedFeatures.push(defaultFeatures[i]);
+        }
+        parsedPagesContentSettings.about.features = mergedFeatures;
+      }
+    }
+
     const settings = {
       profile: {
         username: admin?.username || 'admin',
@@ -373,7 +413,7 @@ export const updateAdminSettings = async (req, res) => {
   try {
     // Support both direct object and section-based updates
     let { profile, store, security, notifications, seo, pagesContent, section, data } = req.body;
-    
+
     // If section-based update (from PATCH), extract the section data
     if (section && data) {
       if (section === 'profile') profile = data;
@@ -386,10 +426,23 @@ export const updateAdminSettings = async (req, res) => {
 
     // Update profile if provided
     if (profile) {
-      const admin = await Admin.findById(req.admin.adminId);
+      const admin = await Admin.findById(req.admin.adminId).select('+password');
       if (admin) {
         if (profile.email) admin.email = profile.email;
         if (profile.fullName) admin.username = profile.fullName;
+
+        // Handle password change
+        if (profile.oldPassword && profile.newPassword) {
+          const isMatch = await admin.comparePassword(profile.oldPassword);
+          if (!isMatch) {
+            return res.status(400).json({
+              success: false,
+              error: 'Invalid current password'
+            });
+          }
+          admin.password = profile.newPassword;
+        }
+
         await admin.save();
       }
     }
@@ -545,7 +598,7 @@ export const getStoreSettings = async (req, res) => {
     let storeSettings = defaultSettings;
     try {
       const settings = await Settings.findOne({ key: 'store' });
-      
+
       if (settings?.value) {
         if (typeof settings.value === 'string') {
           try {
@@ -632,7 +685,7 @@ export const getWhatsAppNumber = async (req, res) => {
     // First try to get from store settings (new way)
     const storeSettings = await Settings.findOne({ key: 'store' });
     let whatsappNumber = '+201000000000';
-    
+
     if (storeSettings?.value) {
       let parsedStoreSettings = {};
       if (typeof storeSettings.value === 'string') {
@@ -644,12 +697,12 @@ export const getWhatsAppNumber = async (req, res) => {
       } else {
         parsedStoreSettings = storeSettings.value;
       }
-      
+
       if (parsedStoreSettings.whatsapp) {
         whatsappNumber = parsedStoreSettings.whatsapp;
       }
     }
-    
+
     // Fallback to old way (separate whatsapp key)
     if (whatsappNumber === '+201000000000') {
       const settings = await Settings.findOne({ key: 'whatsapp' });
@@ -657,7 +710,7 @@ export const getWhatsAppNumber = async (req, res) => {
         whatsappNumber = settings.value;
       }
     }
-    
+
     res.json({
       success: true,
       whatsappNumber: whatsappNumber
@@ -682,7 +735,7 @@ export const updateWhatsAppNumber = async (req, res) => {
     // Update in store settings (new way - preferred)
     const storeSettings = await Settings.findOne({ key: 'store' });
     let parsedStoreSettings = {};
-    
+
     if (storeSettings?.value) {
       if (typeof storeSettings.value === 'string') {
         try {
@@ -694,10 +747,10 @@ export const updateWhatsAppNumber = async (req, res) => {
         parsedStoreSettings = storeSettings.value;
       }
     }
-    
+
     // Update whatsapp in store settings
     parsedStoreSettings.whatsapp = whatsappNumber;
-    
+
     await Settings.findOneAndUpdate(
       { key: 'store' },
       { key: 'store', value: parsedStoreSettings, type: 'object' },
@@ -767,7 +820,7 @@ export const getSeoSettings = async (req, res) => {
     let seoSettings = defaultSeoSettings;
     try {
       const settings = await Settings.findOne({ key: 'seo' });
-      
+
       if (settings?.value) {
         if (typeof settings.value === 'string') {
           try {
@@ -808,6 +861,7 @@ export const getPagesContent = async (req, res) => {
   try {
     const defaultPagesContentSettings = {
       contact: {
+        enabled: true,
         heroTitleAr: 'اتصل بنا',
         heroTitleEn: 'Contact Us',
         heroDescriptionAr: 'نحن هنا لمساعدتك في أي وقت. تواصل معنا وسنكون سعداء لخدمتك',
@@ -827,7 +881,12 @@ export const getPagesContent = async (req, res) => {
         whatsappButtonTextAr: 'ابدأ المحادثة',
         whatsappButtonTextEn: 'Start Chat',
         whatsappMessageAr: 'مرحباً، أريد الاستفسار عن المنتجات',
-        whatsappMessageEn: 'Hello, I want to inquire about products'
+        whatsappMessageEn: 'Hello, I want to inquire about products',
+        facebookUrl: '',
+        facebookDescriptionAr: 'تواصل معنا عبر صفحتنا الرسمية على فيسبوك.',
+        facebookDescriptionEn: 'Connect with us through our official Facebook page.',
+        facebookButtonTextAr: 'زيارة صفحتنا',
+        facebookButtonTextEn: 'Visit Page'
       },
       about: {
         heroTitleAr: 'من نحن',
@@ -886,17 +945,140 @@ export const getPagesContent = async (req, res) => {
         ctaTitleEn: 'Join the Elegance Journey',
         ctaDescriptionAr: 'اكتشف مجموعتنا المميزة من الأزياء العربية الأصيلة واختر ما يناسبك واقتنِ الجودة التي تستحقها.',
         ctaDescriptionEn: 'Discover our exclusive collection of authentic Arabic fashion and choose what suits you and experience the quality you deserve.',
-        ctaButton1TextAr: 'تصفح المنتجات',
-        ctaButton1TextEn: 'Browse Products',
         ctaButton2TextAr: 'تواصل معنا',
         ctaButton2TextEn: 'Contact Us'
+      },
+      terms: {
+        enabled: true,
+        heroTitleAr: 'الشروط وسياسة الخصوصية',
+        heroTitleEn: 'Terms & Privacy Policy',
+        heroDescriptionAr: 'اقرأ شروط الاستخدام وسياسة الخصوصية الخاصة بنا',
+        heroDescriptionEn: 'Read our terms of use and privacy policy',
+        termsTitleAr: 'شروط وأحكام الاستخدام',
+        termsTitleEn: 'Terms and Conditions',
+        termsLastUpdatedAr: 'آخر تحديث: 2025',
+        termsLastUpdatedEn: 'Last Updated: 2025',
+        termsSections: [
+          {
+            subtitleAr: '1. القبول',
+            subtitleEn: '1. Acceptance',
+            textAr: 'باستخدام موقع رِداء، أنت توافق على الالتزام بهذه الشروط والأحكام. إذا كنت لا توافق على أي جزء من هذه الشروط، يرجى عدم استخدام موقعنا.',
+            textEn: 'By using the RIDAA website, you agree to be bound by these terms and conditions. If you do not agree to any part of these terms, please do not use our website.'
+          },
+          {
+            subtitleAr: '2. استخدام الموقع',
+            subtitleEn: '2. Use of the Website',
+            textAr: 'أنت مسؤول عن الحفاظ على سرية معلومات حسابك وكلمة المرور.',
+            textEn: 'You are responsible for maintaining the confidentiality of your account information and password.'
+          },
+          {
+            subtitleAr: '3. المنتجات والأسعار',
+            subtitleEn: '3. Products and Pricing',
+            textAr: 'نحتفظ بالحق في تغيير الأسعار والمعلومات المتعلقة بالمنتجات في أي وقت دون إشعار مسبق. جميع الصور والنصوص هي لأغراض توضيحية وقد تختلف عن المنتج الفعلي.',
+            textEn: 'We reserve the right to change prices and product information at any time without prior notice. All images and descriptions are for illustrative purposes and may differ from the actual product.'
+          },
+          {
+            subtitleAr: '4. الطلبات والدفع',
+            subtitleEn: '4. Orders and Payment',
+            textAr: 'عند تقديم طلب، فإنك توافق على شراء المنتجات بالأسعار المذكورة. جميع المدفوعات تتم بشكل آمن من خلال أنظمة الدفع المعتمدة.',
+            textEn: 'By placing an order, you agree to purchase products at the stated prices. All payments are processed securely through approved payment systems.'
+          },
+          {
+            subtitleAr: '5. الشحن والتسليم',
+            subtitleEn: '5. Shipping and Delivery',
+            textAr: 'نوفر خدمة الشحن لجميع محافظات مصر. وقت التسليم التقريبي يتراوح بين 3-7 أيام عمل حسب الموقع. قد تتغير التواريخ بسبب ظروف خارجة عن إرادتنا.',
+            textEn: 'We provide shipping services to all governorates in Egypt. Estimated delivery time ranges from 3-7 business days depending on location. Delivery dates may change due to circumstances beyond our control.'
+          },
+          {
+            subtitleAr: '6. الإرجاع والاستبدال',
+            subtitleEn: '6. Returns and Exchanges',
+            textAr: 'يمكنك إرجاع المنتجات خلال 14 يوماً من تاريخ الاستلام بشرط أن تكون في حالتها الأصلية وبلا ضرر. بعض المنتجات قد لا تكون قابلة للإرجاع.',
+            textEn: 'You may return products within 14 days of receipt, provided they are in their original condition and undamaged. Some products may not be returnable.'
+          },
+          {
+            subtitleAr: '7. الملكية الفكرية',
+            subtitleEn: '7. Intellectual Property',
+            textAr: 'جميع محتويات الموقع بما في ذلك النصوص والصور والشعارات محمية بحقوق الطبع والنشر. يحظر استخدام أو نسخ أي محتوى دون إذن كتابي.',
+            textEn: 'All website content including text, images, and logos are protected by copyright. Use or reproduction of any content without written permission is prohibited.'
+          },
+          {
+            subtitleAr: '8. التعديلات',
+            subtitleEn: '8. Modifications',
+            textAr: 'نحتفظ بالحق في تعديل هذه الشروط والأحكام في أي وقت. يُنصح بمراجعة هذه الصفحة بانتظام.',
+            textEn: 'We reserve the right to modify these terms and conditions at any time. It is recommended to review this page regularly.'
+          }
+        ],
+        privacyTitleAr: 'سياسة الخصوصية',
+        privacyTitleEn: 'Privacy Policy',
+        privacyLastUpdatedAr: 'آخر تحديث: 2025',
+        privacyLastUpdatedEn: 'Last Updated: 2025',
+        privacySections: [
+          {
+            subtitleAr: '1. المعلومات التي نجمعها',
+            subtitleEn: '1. Information We Collect',
+            textAr: 'نجمع المعلومات التي تقدمها لنا مباشرة مثل الاسم، البريد الإلكتروني، رقم الهاتف، والعنوان عند إتمام عملية الشراء.',
+            textEn: 'We collect information you provide directly to us such as name, email, phone number, and address when completing a purchase.'
+          },
+          {
+            subtitleAr: '2. استخدام المعلومات',
+            subtitleEn: '2. How We Use Information',
+            textAr: 'نستخدم المعلومات التي نجمعها لمعالجة الطلبات، التواصل معك، تحسين خدماتنا، وإرسال التحديثات والعروض الخاصة (إذا وافقت على ذلك).',
+            textEn: 'We use the information we collect to process orders, communicate with you, improve our services, and send updates and special offers (if you have agreed to this).'
+          },
+          {
+            subtitleAr: '3. حماية المعلومات',
+            subtitleEn: '3. Information Protection',
+            textAr: 'نتخذ تدابير أمنية قوية لحماية معلوماتك الشخصية من الوصول غير المصرح به أو التغيير أو الكشف. جميع المعاملات تتم عبر قنوات آمنة.',
+            textEn: 'We implement strong security measures to protect your personal information from unauthorized access, alteration, or disclosure. All transactions are conducted through secure channels.'
+          },
+          {
+            subtitleAr: '4. مشاركة المعلومات',
+            subtitleEn: '4. Information Sharing',
+            textAr: 'لا نبيع أو نؤجر معلوماتك الشخصية لأطراف ثالثة. قد نشارك المعلومات مع شركاء الشحن وخدمات الدفع فقط لتنفيذ طلباتك.',
+            textEn: 'We do not sell or rent your personal information to third parties. We may share information with shipping partners and payment services only to fulfill your orders.'
+          },
+          {
+            subtitleAr: '5. ملفات تعريف الارتباط (Cookies)',
+            subtitleEn: '5. Cookies',
+            textAr: 'نستخدم ملفات تعريف الارتباط لتحسين تجربتك على موقعنا، تتبع سلوك الشراء، وتخصيص المحتوى. يمكنك إدارة ملفات تعريف الارتباط من إعدادات المتصفح.',
+            textEn: 'We use cookies to enhance your experience on our website, track purchasing behavior, and personalize content. You can manage cookies through your browser settings.'
+          },
+          {
+            subtitleAr: '6. حقوقك',
+            subtitleEn: '6. Your Rights',
+            textAr: 'لديك الحق في الوصول إلى معلوماتك الشخصية، تحديثها، أو حذفها في أي وقت. يمكنك أيضاً إلغاء الاشتراك في رسائل البريد الإلكتروني التسويقية.',
+            textEn: 'You have the right to access, update, or delete your personal information at any time. You can also unsubscribe from marketing emails.'
+          },
+          {
+            subtitleAr: '7. روابط خارجية',
+            subtitleEn: '7. External Links',
+            textAr: 'قد يحتوي موقعنا على روابط لمواقع خارجية. نحن لسنا مسؤولين عن ممارسات الخصوصية لتلك المواقع.',
+            textEn: 'Our website may contain links to external sites. We are not responsible for the privacy practices of those websites.'
+          },
+          {
+            subtitleAr: '8. التغييرات على السياسة',
+            subtitleEn: '8. Policy Changes',
+            textAr: 'قد نحدث سياسة الخصوصية هذه من وقت لآخر. سيتم إشعارك بأي تغييرات جوهرية عبر البريد الإلكتروني أو إشعار على الموقع.',
+            textEn: 'We may update this privacy policy from time to time. You will be notified of any significant changes via email or a notice on the website.'
+          }
+        ],
+        contactTitleAr: 'هل لديك أسئلة؟',
+        contactTitleEn: 'Have Questions?',
+        contactDescriptionAr: 'إذا كان لديك أي استفسارات حول شروط الاستخدام أو سياسة الخصوصية، يرجى التواصل معنا',
+        contactDescriptionEn: 'If you have any questions about our terms or privacy policy, please contact us',
+        importantNoticeTitleAr: 'مهم',
+        importantNoticeTitleEn: 'Important Notice',
+        importantNoticeTextAr: 'باستخدام موقع رِداء وخدماته، فإنك تقر بأنك قد قرأت وفهمت ووافقت على هذه الشروط والأحكام وسياسة الخصوصية. إذا كنت لا توافق على هذه الشروط، يرجى عدم استخدام موقعنا.',
+        importantNoticeTextEn: 'By using the RIDAA website and its services, you acknowledge that you have read, understood, and agree to these terms and conditions and privacy policy. If you do not agree to these terms, please do not use our website.',
+        backToRegistrationTextAr: 'العودة إلى صفحة التسجيل',
+        backToRegistrationTextEn: 'Back to Registration'
       }
     };
 
     let pagesContent = defaultPagesContentSettings;
     try {
       const settings = await Settings.findOne({ key: 'pagesContent' });
-      
+
       if (settings?.value) {
         if (typeof settings.value === 'string') {
           try {

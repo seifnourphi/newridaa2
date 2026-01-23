@@ -9,7 +9,7 @@ const generateAdminToken = (adminId, username) => {
   }
 
   return jwt.sign(
-    { 
+    {
       adminId,
       username,
       role: 'admin',
@@ -35,9 +35,9 @@ export const adminLogin = async (req, res) => {
     }
 
     // Find admin
-    const admin = await Admin.findOne({ 
+    const admin = await Admin.findOne({
       username: username.toLowerCase(),
-      isActive: true 
+      isActive: true
     }).select('+password');
 
     if (!admin) {
@@ -61,17 +61,17 @@ export const adminLogin = async (req, res) => {
     if (!isPasswordValid) {
       // Increment login attempts
       admin.loginAttempts += 1;
-      
+
       // Lock account after 5 failed attempts for 2 hours
       if (admin.loginAttempts >= 5) {
         admin.lockUntil = Date.now() + 2 * 60 * 60 * 1000; // 2 hours
       }
-      
+
       await admin.save();
-      
+
       // Add delay to prevent timing attacks
       await new Promise(resolve => setTimeout(resolve, 500));
-      
+
       return res.status(401).json({
         success: false,
         error: 'Invalid username or password'
@@ -92,6 +92,7 @@ export const adminLogin = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
+      path: '/',
       maxAge: 60 * 60 * 1000 // 1 hour
     });
 
@@ -154,7 +155,7 @@ export const adminLogout = async (req, res) => {
   try {
     // Clear cookie
     res.clearCookie('adminToken');
-    
+
     res.json({
       success: true,
       message: 'Logged out successfully'

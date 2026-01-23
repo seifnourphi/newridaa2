@@ -2,13 +2,8 @@
 export function generateInvoiceHTML(order, lang = 'ar', user = null, storeSettings = null, baseUrl = 'http://localhost:5000', logoDataUrl = null) {
   const isArabic = lang === 'ar';
 
-  // Use base64 logo if available, otherwise use URL (still used in footer)
-  let logoUrl;
-  if (logoDataUrl) {
-    logoUrl = logoDataUrl;
-  } else {
-    logoUrl = `${baseUrl}/uploads/logos/logo.png`;
-  }
+  // Use base64 logo if available, otherwise don't provide a URL to avoid hangs
+  let logoUrl = logoDataUrl || '';
 
   const orderDate = new Date(order.createdAt).toLocaleString(
     isArabic ? 'ar-EG' : 'en-US',
@@ -144,65 +139,52 @@ export function generateInvoiceHTML(order, lang = 'ar', user = null, storeSettin
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${translations.title} ${order.orderNumber}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Inter:wght@300;400;500;600;700&family=Dancing+Script:wght@400;500;600;700&family=Great+Vibes&family=Allura&display=swap" rel="stylesheet">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Inter:wght@300;400;500;600;700&family=Dancing+Script:wght@400;500;600;700&family=Great+Vibes&family=Allura&display=swap');
-    
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
     body {
-      font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
       background: white;
-      padding: 60px 50px;
+      padding: 60px 40px;
       color: #000;
       font-size: 11px;
-      line-height: 1.6;
+      line-height: 1.5;
     }
     .invoice-container {
       max-width: 800px;
       margin: 0 auto;
-      background: white;
     }
     
     /* Logo Section */
     .logo-section {
       text-align: center;
-      margin-bottom: 32px;
-      padding: 12px 0 18px;
+      margin-bottom: 30px;
+      padding-bottom: 15px;
     }
     .logo-title {
-      font-family: 'Times New Roman', 'Georgia', serif;
-      font-size: 22px;
-      letter-spacing: 3.5px;
-      color: #d4af37; /* refined gold for white background */
-      font-weight: 700;
+      font-family: 'Times New Roman', serif;
+      font-size: 26px;
+      letter-spacing: 4px;
+      color: #d4af37;
+      font-weight: bold;
       text-transform: uppercase;
     }
     .logo-line {
-      margin: 8px auto 6px;
-      width: 88%;
-      max-width: 420px;
-      height: 2px;
-      border-radius: 999px;
-      background: linear-gradient(
-        90deg,
-        transparent 0%,
-        transparent 15%,
-        #daa520 45%,
-        #daa520 55%,
-        transparent 85%,
-        transparent 100%
-      );
-      box-shadow: 0 0 3px rgba(218,165,32,0.6);
+      margin: 10px auto;
+      width: 80%;
+      height: 1px;
+      background: linear-gradient(to right, transparent, #d4af37, transparent);
     }
     .logo-tagline {
-      margin-top: 4px;
-      font-size: 8px;
+      font-size: 9px;
       letter-spacing: 3px;
-      color: #c7920b;
-      font-weight: 600;
+      color: #999;
       text-transform: uppercase;
     }
     
@@ -499,7 +481,6 @@ export function generateInvoiceHTML(order, lang = 'ar', user = null, storeSettin
         <div class="customer-content">
           ${translations.name}: ${customerName}<br>
           ${translations.phone}: ${customerPhone}<br>
-          ${translations.email}: ${customerEmail || 'N/A'}<br>
           ${translations.paymentMethod}: ${paymentMethodText}
           ${(order.paymentMethod === 'instapay' || order.paymentMethod === 'vodafone') && storeSettings ? `
           <br><br>

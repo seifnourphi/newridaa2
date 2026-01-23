@@ -6,6 +6,32 @@ import { generateInvoiceHTML } from './invoice-template.js';
 import { sendOrderNotification, sendLowStockAlert, sendOrderStatusUpdateNotification } from '../utils/notification.util.js';
 
 
+// Helper to extract clean payment proof URL or object
+const getPaymentProofUrl = (paymentProof) => {
+  if (!paymentProof) return null;
+
+  if (typeof paymentProof === 'object') {
+    if (paymentProof.url) {
+      return paymentProof.url.startsWith('http')
+        ? paymentProof.url.replace(/^https?:\/\/[^\/]+/, '')
+        : (paymentProof.url.startsWith('/') ? paymentProof.url : `/${paymentProof.url}`);
+    }
+    // If it's a base64 object (data + contentType), return it as is for frontend processing
+    if (paymentProof.data && paymentProof.contentType) {
+      return paymentProof;
+    }
+    return paymentProof;
+  }
+
+  if (typeof paymentProof === 'string') {
+    return paymentProof.startsWith('http')
+      ? paymentProof.replace(/^https?:\/\/[^\/]+/, '')
+      : (paymentProof.startsWith('/') ? paymentProof : `/${paymentProof}`);
+  }
+
+  return null;
+};
+
 // @desc    Create order
 // @route   POST /api/orders
 // @access  Private
@@ -62,13 +88,20 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    // Handle payment proof (from file upload)
+    // Handle payment proof (support both file upload buffer and pre-uploaded URL)
     let paymentProofData = null;
     if (req.file) {
       paymentProofData = {
         data: req.file.buffer.toString('base64'),
         contentType: req.file.mimetype
       };
+    } else if (paymentProofUrl) {
+      paymentProofData = {
+        url: paymentProofUrl
+      };
+    } else if (paymentProof) {
+      // Handle potential object format from frontend
+      paymentProofData = typeof paymentProof === 'string' ? { url: paymentProof } : paymentProof;
     }
 
     // Calculate subtotal
@@ -101,7 +134,7 @@ export const createOrder = async (req, res) => {
         quantity: item.quantity,
         size: item.selectedSize || item.size || null,
         color: item.selectedColor || item.color || null,
-        image: product.images?.[0] || null
+        image: product.images?.[0]?.url || product.images?.[0] || null
       });
     }
 
@@ -169,19 +202,65 @@ export const createOrder = async (req, res) => {
 
     // Update product stock and check for low stock alerts
     for (const item of orderItems) {
-      const updatedProduct = await Product.findByIdAndUpdate(
-        item.product,
-        { $inc: { stockQuantity: -item.quantity } },
-        { new: true }
+      // Find matching variant if size/color provided
+      const hasVariant = item.size || item.color;
+
+      const updateFilter = {
+        _id: item.product,
+        stockQuantity: { $gte: item.quantity }
+      };
+
+      if (hasVariant) {
+        updateFilter.variantCombinations = {
+          $elemMatch: {
+            ...(item.size ? { size: item.size } : {}),
+            ...(item.color ? { color: item.color } : {}),
+            stock: { $gte: item.quantity }
+          }
+        };
+      }
+
+      const updateOps = {
+        $inc: { stockQuantity: -item.quantity }
+      };
+
+      if (hasVariant) {
+        updateOps.$inc["variantCombinations.$[elem].stock"] = -item.quantity;
+      }
+
+      const updatedProduct = await Product.findOneAndUpdate(
+        updateFilter,
+        updateOps,
+        {
+          new: true,
+          arrayFilters: hasVariant ? [
+            {
+              ...(item.size ? { "elem.size": item.size } : {}),
+              ...(item.color ? { "elem.color": item.color } : {})
+            }
+          ] : []
+        }
       );
 
+      if (!updatedProduct) {
+        // Find product to see why it failed
+        const product = await Product.findById(item.product);
+        const errorMsg = product
+          ? `Insufficient stock for ${product.name}${hasVariant ? ` (${item.size || ''} ${item.color || ''})` : ''}`
+          : 'Product not found during stock update';
+
+        return res.status(400).json({
+          success: false,
+          error: errorMsg
+        });
+      }
+
       // Check for low stock alert (if stock is 5 or less)
-      if (updatedProduct && updatedProduct.stockQuantity <= 5) {
+      if (updatedProduct.stockQuantity <= 5) {
         try {
           await sendLowStockAlert(updatedProduct, 'ar');
         } catch (alertError) {
           console.error('Error sending low stock alert:', alertError);
-          // Don't fail the order creation if alert fails
         }
       }
     }
@@ -208,9 +287,15 @@ export const createOrder = async (req, res) => {
       // Don't fail the order creation if notification fails
     }
 
+    // Construct paymentProofUrl for the response using helper
+    const paymentProofUrlResponse = getPaymentProofUrl(order.paymentProof);
+
     res.status(201).json({
       success: true,
-      data: order
+      data: order,
+      order,
+      orderNumber: order.orderNumber,
+      paymentProofUrl: paymentProofUrlResponse
     });
   } catch (error) {
     res.status(500).json({
@@ -612,6 +697,12 @@ export const getOrderInvoice = async (req, res) => {
         // Generate HTML invoice using the same template as old project
         const invoiceHTML = generateInvoiceHTML(orderForTemplate, lang, userInfo, storeSettings, baseUrl, logoDataUrl);
 
+        // Debug: Log HTML length and first/last chars
+        console.log(`[Invoice Debug] HTML Length: ${invoiceHTML.length}`);
+        if (invoiceHTML.length < 100) {
+          console.error(`[Invoice Debug] HTML seems too short! Content: ${invoiceHTML}`);
+        }
+
         // Convert HTML to PDF using puppeteer
         const puppeteer = await import('puppeteer');
         const browser = await puppeteer.launch({
@@ -626,9 +717,16 @@ export const getOrderInvoice = async (req, res) => {
         });
 
         const page = await browser.newPage();
+        await page.setViewport({ width: 1200, height: 1600 });
+
+        // Use domcontentloaded as we removed external assets
         await page.setContent(invoiceHTML, {
-          waitUntil: 'networkidle0',
+          waitUntil: 'domcontentloaded',
+          timeout: 30000
         });
+
+        // Small delay to ensure any internal rendering is done
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         const pdfBuffer = await page.pdf({
           format: 'A4',
@@ -639,10 +737,10 @@ export const getOrderInvoice = async (req, res) => {
             bottom: '1cm',
             left: '1cm',
           },
-          preferCSSPageSize: false,
         });
 
         await browser.close();
+        console.log(`[Invoice Debug] PDF Length: ${pdfBuffer.length} bytes`);
 
         // Set headers and send PDF
         res.setHeader('Content-Type', 'application/pdf');
@@ -726,6 +824,14 @@ export const updateAdminOrder = async (req, res) => {
       order.trackingNumber = trackingNumber;
     }
 
+    // Update payment status
+    if (req.body.paymentStatus !== undefined) {
+      const validPaymentStatuses = ['pending', 'paid', 'failed', 'refunded'];
+      if (validPaymentStatuses.includes(req.body.paymentStatus)) {
+        order.paymentStatus = req.body.paymentStatus;
+      }
+    }
+
     // Update cancellation reason if provided
     if (cancellationReason !== undefined) {
       order.cancelledReason = cancellationReason;
@@ -733,6 +839,38 @@ export const updateAdminOrder = async (req, res) => {
         order.cancelledAt = new Date();
       } else {
         order.cancelledAt = null;
+      }
+    }
+
+    // Handle stock replenishment if order is being cancelled
+    if (order.orderStatus === 'cancelled' && oldStatus !== 'cancelled') {
+      for (const item of order.items) {
+        const hasVariant = item.size || item.color;
+
+        const updateOps = {
+          $inc: { stockQuantity: item.quantity }
+        };
+
+        if (hasVariant) {
+          updateOps.$inc["variantCombinations.$[elem].stock"] = item.quantity;
+        }
+
+        try {
+          await Product.findOneAndUpdate(
+            { _id: item.product },
+            updateOps,
+            {
+              arrayFilters: hasVariant ? [
+                {
+                  ...(item.size ? { "elem.size": item.size } : {}),
+                  ...(item.color ? { "elem.color": item.color } : {})
+                }
+              ] : []
+            }
+          );
+        } catch (err) {
+          console.error(`Failed to replenish stock for product ${item.product}:`, err);
+        }
       }
     }
 
@@ -784,6 +922,8 @@ export const updateAdminOrder = async (req, res) => {
       shippingPaymentMethod: updatedOrder.shippingPaymentMethod || null,
       paymentStatus: updatedOrder.paymentStatus || 'pending',
       notes: updatedOrder.notes || null,
+      paymentProof: updatedOrder.paymentProof || null,
+      paymentProofUrl: getPaymentProofUrl(updatedOrder.paymentProof),
       couponCode: updatedOrder.coupon?.code || null
     };
 
@@ -872,94 +1012,74 @@ export const getAdminOrders = async (req, res) => {
       Order.countDocuments(query)
     ]);
 
-    // Transform orders to match frontend format
-    // The frontend expects each item in items array to be a separate order entry
-    // So we flatten the order items into individual order entries
-    const transformedOrders = [];
+    // Transform orders to match a more professional grouped format
+    const transformedOrders = orders.map(order => {
+      // Calculate total quantity
+      const totalQuantity = (order.items || []).reduce((sum, item) => sum + (item.quantity || 0), 0);
 
-    orders.forEach(order => {
-      const totalItems = order.items.length;
-      // Calculate shipping and discount per item (for display, frontend will sum them)
-      const shippingPerItem = totalItems > 0 ? (order.shippingPrice || 0) / totalItems : 0;
-      const discountPerItem = totalItems > 0 ? (order.discount || 0) / totalItems : 0;
-
-      // If order has multiple items, create an entry for each item
-      order.items.forEach((item, itemIndex) => {
-        const itemTotalPrice = (item.price || 0) * (item.quantity || 0);
-
-        // Handle product images - support both array of objects and array of strings
+      const items = (order.items || []).map(item => {
+        // Handle product images
         let productImages = [];
         if (item.product?.images) {
           if (Array.isArray(item.product.images)) {
             productImages = item.product.images.map(img => {
-              if (typeof img === 'string') {
-                return { url: img, alt: item.product?.name || '' };
-              }
+              if (typeof img === 'string') return { url: img, alt: item.product?.name || '' };
               return { url: img?.url || img, alt: img?.alt || item.product?.name || '' };
             });
           }
         } else if (item.image) {
-          // Fallback to item.image if product.images is not available
           productImages = [{ url: item.image, alt: item.name || '' }];
         }
 
-        // Create a separate order entry for each item
-        transformedOrders.push({
-          id: `${order._id.toString()}-${itemIndex}`, // Unique ID for each item
-          orderReference: order.orderNumber,
-          orderNumber: order.orderNumber,
-          status: (order.orderStatus || 'pending').toUpperCase(),
+        return {
+          productId: item.product?._id?.toString() || '',
+          name: item.product?.name || item.name || '',
+          nameAr: item.product?.nameAr || '',
+          price: item.price || 0,
           quantity: item.quantity || 0,
-          totalPrice: itemTotalPrice,
-          subtotal: itemTotalPrice,
-          shippingPrice: shippingPerItem,
-          discount: discountPerItem,
-          couponDiscount: discountPerItem,
-          couponCode: order.coupon?.code || null,
-          createdAt: order.createdAt,
-          updatedAt: order.updatedAt,
-          trackingNumber: order.trackingNumber || null,
-          customerName: order.shippingAddress?.name || '',
-          customerPhone: order.shippingAddress?.phone || '',
-          customerEmail: order.user?.email || '',
-          customerAddress: order.shippingAddress?.address || '',
-          city: order.shippingAddress?.city || '',
-          postalCode: order.shippingAddress?.postalCode || '',
-          paymentMethod: order.paymentMethod || 'cash_on_delivery',
-          shippingPaymentMethod: order.shippingPaymentMethod || null,
-          paymentStatus: order.paymentStatus || 'pending',
-          paymentProof: order.paymentProof || null,
-          // Send relative path for paymentProofUrl so Next.js rewrite can handle it
-          // Extract relative path if paymentProof contains full URL
-          paymentProofUrl: order.paymentProof
-            ? (order.paymentProof.startsWith('http')
-              ? order.paymentProof.replace(/^https?:\/\/[^\/]+/, '') // Extract path from full URL
-              : order.paymentProof.startsWith('/')
-                ? order.paymentProof
-                : `/${order.paymentProof}`)
-            : null,
-          notes: order.notes || null,
-          selectedSize: item.size || null,
-          selectedColor: item.color || null,
           size: item.size || null,
           color: item.color || null,
           image: item.image || (productImages[0]?.url || ''),
-          productId: item.product?._id?.toString() || '',
+          sku: item.product?.sku || '',
           product: item.product ? {
-            id: item.product._id?.toString() || '',
-            name: item.product.name || item.name || '',
-            nameAr: item.product.nameAr || '',
-            sku: item.product.sku || '',
+            id: item.product._id?.toString(),
+            name: item.product.name,
+            nameAr: item.product.nameAr,
+            sku: item.product.sku,
             images: productImages
-          } : {
-            id: '',
-            name: item.name || '',
-            nameAr: '',
-            sku: '',
-            images: productImages
-          }
-        });
+          } : null
+        };
       });
+
+      return {
+        id: order._id.toString(),
+        orderReference: order.orderNumber,
+        orderNumber: order.orderNumber,
+        status: (order.orderStatus || 'pending').toUpperCase(),
+        quantity: totalQuantity,
+        totalPrice: order.total || 0,
+        subtotal: order.subtotal || 0,
+        shippingPrice: order.shippingPrice || 0,
+        discount: order.discount || 0,
+        couponDiscount: order.discount || 0,
+        couponCode: order.coupon?.code || null,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+        trackingNumber: order.trackingNumber || null,
+        customerName: order.shippingAddress?.name || '',
+        customerPhone: order.shippingAddress?.phone || '',
+        customerEmail: order.user?.email || '',
+        customerAddress: order.shippingAddress?.address || '',
+        city: order.shippingAddress?.city || '',
+        postalCode: order.shippingAddress?.postalCode || '',
+        paymentMethod: order.paymentMethod || 'cash_on_delivery',
+        shippingPaymentMethod: order.shippingPaymentMethod || null,
+        paymentStatus: order.paymentStatus || 'pending',
+        paymentProof: order.paymentProof || null,
+        paymentProofUrl: getPaymentProofUrl(order.paymentProof),
+        notes: order.notes || null,
+        items
+      };
     });
 
     res.json({

@@ -1,9 +1,11 @@
 import express from 'express';
-import { getCategories } from '../controllers/category.controller.js';
+import { getCategories, getCategory } from '../controllers/category.controller.js';
 
 const router = express.Router();
 
 router.get('/', getCategories);
+router.get('/:slug', getCategory);
+router.get('/id/:id', getCategory);
 
 export default router;
 

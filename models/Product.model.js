@@ -13,7 +13,8 @@ const variantSchema = new mongoose.Schema({
   valueAr: String,
   stock: {
     type: Number,
-    default: 0
+    default: 0,
+    min: [0, 'Stock cannot be negative']
   }
 }, { _id: false });
 
@@ -23,7 +24,8 @@ const variantCombinationSchema = new mongoose.Schema({
   stock: {
     type: Number,
     required: true,
-    default: 0
+    default: 0,
+    min: [0, 'Stock cannot be negative']
   },
   sortOrder: {
     type: Number,
@@ -71,16 +73,16 @@ const productSchema = new mongoose.Schema({
   originalPrice: Number,
   discountPercent: Number,
   images: [{
-    data: {
-      type: String,
-      required: true
-    },
-    contentType: {
+    url: {
       type: String,
       required: true
     },
     alt: String,
-    altAr: String
+    altAr: String,
+    sortOrder: {
+      type: Number,
+      default: 0
+    }
   }],
   category: {
     type: mongoose.Schema.Types.ObjectId,
@@ -130,8 +132,12 @@ const productSchema = new mongoose.Schema({
     default: 0
   },
   tags: [String],
+  shortDescription: String,
+  shortDescriptionAr: String,
   metaTitle: String,
-  metaDescription: String
+  metaTitleAr: String,
+  metaDescription: String,
+  metaDescriptionAr: String
 }, {
   timestamps: true,
   suppressReservedKeysWarning: true

@@ -8,36 +8,37 @@ import {
 import { authenticateAdmin } from '../middleware/admin.middleware.js';
 import { authLimiter, strictLimiter, adminLimiter } from '../middleware/rateLimit.middleware.js';
 import { verifyCSRF } from '../middleware/csrf.middleware.js';
-import { 
-  getAdminProducts, 
+import {
+  getAdminProducts,
   getProductsStats,
-  getProduct, 
-  createProduct, 
-  updateProduct, 
-  deleteProduct 
+  getProduct,
+  createProduct,
+  updateProduct,
+  deleteProduct
 } from '../controllers/product.controller.js';
 import { getAdminReviews, updateAdminReview, deleteAdminReview } from '../controllers/review.controller.js';
-import { 
+import {
   getAdminCategories,
+  getCategory,
   createCategory,
   updateCategory,
   deleteCategory
 } from '../controllers/category.controller.js';
-import { 
+import {
   getCoupons,
-  getAdminCoupons, 
+  getAdminCoupons,
   getCoupon,
-  createCoupon, 
-  updateCoupon, 
-  deleteCoupon 
+  createCoupon,
+  updateCoupon,
+  deleteCoupon
 } from '../controllers/coupon.controller.js';
-import { 
+import {
   getAdminUsers,
   getAdminUser,
   updateAdminUser,
   deleteAdminUser
 } from '../controllers/user.controller.js';
-import { 
+import {
   getAdminAdvertisements,
   getAdminAdvertisement,
   createAdvertisement,
@@ -46,12 +47,12 @@ import {
   seedAdvertisements,
   exportAdvertisementsAsDefaults
 } from '../controllers/advertisement.controller.js';
-import { 
+import {
   getAdminOrders,
   getAdminOrdersStats,
   updateAdminOrder
 } from '../controllers/order.controller.js';
-import { 
+import {
   getSubscribersCount,
   getSubscribers,
   sendNewsletter,
@@ -83,6 +84,7 @@ router.delete('/products/:id', authenticateAdmin, verifyCSRF, deleteProduct);
 
 // Categories routes (admin only)
 router.get('/categories', authenticateAdmin, getAdminCategories);
+router.get('/categories/:id', authenticateAdmin, getCategory);
 router.post('/categories', authenticateAdmin, verifyCSRF, createCategory);
 router.put('/categories/:id', authenticateAdmin, verifyCSRF, updateCategory);
 router.patch('/categories/:id', authenticateAdmin, verifyCSRF, updateCategory); // Support PATCH as well

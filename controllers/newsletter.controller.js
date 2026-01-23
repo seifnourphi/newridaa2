@@ -99,26 +99,26 @@ export const getSubscribers = async (req, res) => {
 // This prevents Gmail clipping by using attachments instead of base64 or external URLs
 const prepareImageAttachment = async (imagePath) => {
   if (!imagePath) return null;
-  
+
   try {
     const fs = await import('fs');
     const path = await import('path');
     const { fileURLToPath } = await import('url');
     const { dirname } = await import('path');
-    
+
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = dirname(__filename);
-    
+
     // Remove leading slash if present
     const cleanPath = imagePath.startsWith('/') ? imagePath.substring(1) : imagePath;
-    
+
     // Try multiple possible paths
     const possiblePaths = [
       path.join(__dirname, '..', cleanPath),
       path.join(process.cwd(), cleanPath),
       path.join(process.cwd(), 'backend', cleanPath),
     ];
-    
+
     let fullPath = null;
     for (const possiblePath of possiblePaths) {
       if (fs.existsSync(possiblePath)) {
@@ -126,7 +126,7 @@ const prepareImageAttachment = async (imagePath) => {
         break;
       }
     }
-    
+
     if (fullPath && fs.existsSync(fullPath)) {
       const imageBuffer = fs.readFileSync(fullPath);
       const ext = path.extname(fullPath).toLowerCase();
@@ -138,7 +138,7 @@ const prepareImageAttachment = async (imagePath) => {
         '.webp': 'image/webp'
       };
       const contentType = contentTypeMap[ext] || 'image/jpeg';
-      
+
       return {
         filename: path.basename(fullPath),
         content: imageBuffer,
@@ -150,7 +150,7 @@ const prepareImageAttachment = async (imagePath) => {
   } catch (error) {
     console.error('Error preparing image attachment:', error);
   }
-  
+
   return null;
 };
 
@@ -170,16 +170,16 @@ const escapeHtml = (text) => {
 // Helper function to generate HTML email content
 const generateEmailHTML = (subject, message, image) => {
   let imageTag = '';
-  
+
   // Escape subject for HTML
   const safeSubject = escapeHtml(subject);
-  
+
   // Always use CID for images to prevent Gmail clipping
   // CID attachments keep HTML small and ensure images display
   if (image) {
     imageTag = `<img src="cid:newsletter-image" alt="${safeSubject}" style="max-width:100%;height:auto;border-radius:8px;margin:0;display:block;" />`;
   }
-  
+
   // Process message - allow HTML but escape dangerous content
   // If message contains HTML tags, use it as-is (admin-controlled)
   // Otherwise, convert newlines to <br> and escape HTML
@@ -192,14 +192,14 @@ const generateEmailHTML = (subject, message, image) => {
     // Has HTML tags, trust admin but still escape script tags
     processedMessage = message.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
   }
-  
+
   // Limit message length to prevent Gmail clipping (keep HTML under 50KB)
   const maxMessageLength = 20000; // ~20KB of text should be safe
   if (processedMessage.length > maxMessageLength) {
-    console.warn(`⚠️ Message is very long (${(processedMessage.length/1024).toFixed(2)} KB), may cause Gmail clipping`);
+    console.warn(`⚠️ Message is very long (${(processedMessage.length / 1024).toFixed(2)} KB), may cause Gmail clipping`);
     processedMessage = processedMessage.substring(0, maxMessageLength) + '...';
   }
-  
+
   // Use inline styles only to prevent Gmail clipping
   // Gmail clips emails with complex HTML or large style tags
   return `
@@ -228,7 +228,7 @@ const generateEmailHTML = (subject, message, image) => {
           <td style="padding:20px;text-align:center;border-top:1px solid #ddd;color:#666;font-size:12px;">
             <p style="margin:5px 0;">شكراً لاشتراكك في نشرتنا الإخبارية</p>
             <p style="margin:5px 0;">Thank you for subscribing to our newsletter</p>
-            <p style="margin:10px 0;"><a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/unsubscribe" style="color:#DAA520;text-decoration:none;">إلغاء الاشتراك / Unsubscribe</a></p>
+            <p style="margin:10px 0;"><a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/account/profile#newsletter" style="color:#DAA520;text-decoration:none;">إلغاء الاشتراك / Unsubscribe</a></p>
           </td>
         </tr>
       </table>
@@ -243,20 +243,20 @@ const generateEmailHTML = (subject, message, image) => {
 export const sendTestNewsletter = async (req, res) => {
   try {
     const { subject, message, image, testEmail } = req.body;
-    
+
     if (!subject || !message) {
       return res.status(400).json({
         success: false,
         error: 'Subject and message are required'
       });
     }
-    
+
     // Get admin email from request
     const adminEmail = req.admin?.email || testEmail || 'ridaa.store.team@gmail.com';
-    
+
     // Generate HTML content (using CID for image)
     const htmlContent = generateEmailHTML(subject, message, image);
-    
+
     // Prepare image attachment if image exists
     const attachments = [];
     if (image) {
@@ -265,7 +265,7 @@ export const sendTestNewsletter = async (req, res) => {
         attachments.push(imageAttachment);
       }
     }
-    
+
     // Send test email
     try {
       await sendEmail(
@@ -275,7 +275,7 @@ export const sendTestNewsletter = async (req, res) => {
         htmlContent,
         attachments
       );
-      
+
       res.json({
         success: true,
         message: `Test email sent successfully to ${adminEmail}`,
@@ -305,14 +305,14 @@ export const sendTestNewsletter = async (req, res) => {
 export const sendNewsletter = async (req, res) => {
   try {
     const { subject, message, image } = req.body;
-    
+
     if (!subject || !message) {
       return res.status(400).json({
         success: false,
         error: 'Subject and message are required'
       });
     }
-    
+
     // Get all subscribers
     const subscribers = await User.find({
       $or: [
@@ -323,18 +323,18 @@ export const sendNewsletter = async (req, res) => {
     })
       .select('email name')
       .lean();
-    
+
     if (subscribers.length === 0) {
       return res.status(400).json({
         success: false,
         error: 'No subscribers found'
       });
     }
-    
+
     // Generate HTML content (using CID for image)
     // Generate once for all emails to save processing time
     const htmlContent = generateEmailHTML(subject, message, image);
-    
+
     // Prepare image attachment once if image exists (reuse for all emails)
     const attachments = [];
     if (image) {
@@ -343,17 +343,17 @@ export const sendNewsletter = async (req, res) => {
         attachments.push(imageAttachment);
       }
     }
-    
+
     // Send email to all subscribers
     let successCount = 0;
     let failCount = 0;
     const errors = [];
-    
+
     // Send emails in batches to avoid overwhelming the email service
     const batchSize = 10;
     for (let i = 0; i < subscribers.length; i += batchSize) {
       const batch = subscribers.slice(i, i + batchSize);
-      
+
       const emailPromises = batch.map(async (subscriber) => {
         try {
           await sendEmail(
@@ -374,15 +374,15 @@ export const sendNewsletter = async (req, res) => {
           return { success: false, email: subscriber.email, error: error.message };
         }
       });
-      
+
       await Promise.all(emailPromises);
-      
+
       // Small delay between batches to avoid rate limiting
       if (i + batchSize < subscribers.length) {
         await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
       }
     }
-    
+
     res.json({
       success: true,
       message: `Newsletter sent to ${successCount} subscribers${failCount > 0 ? `, ${failCount} failed` : ''}`,
@@ -401,4 +401,5 @@ export const sendNewsletter = async (req, res) => {
     });
   }
 };
+
 

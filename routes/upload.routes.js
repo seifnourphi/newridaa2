@@ -6,8 +6,8 @@ import { verifyCSRF } from '../middleware/csrf.middleware.js';
 
 const router = express.Router();
 
-// Upload route (admin only)
-router.post('/', authenticateAdmin, verifyCSRF, upload.single('file'), uploadFile);
+// Upload route (admin only) - multer must come before CSRF verification
+router.post('/', authenticateAdmin, upload.single('file'), verifyCSRF, uploadFile);
 
 export default router;
 

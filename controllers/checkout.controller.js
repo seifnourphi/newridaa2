@@ -93,17 +93,24 @@ export const uploadPaymentProof = async (req, res) => {
       });
     }
 
-    // Return the Base64 encoded file
+    // Extract relative path from absolute path
+    const relativePath = req.file.path.split('uploads')[1].replace(/\\/g, '/');
+    const fileUrl = `/uploads${relativePath}`;
+
+    // Return the file URL
     const paymentProof = {
-      data: req.file.buffer.toString('base64'),
-      contentType: req.file.mimetype
+      url: fileUrl,
+      filename: req.file.filename,
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
     };
 
     res.json({
       success: true,
       paymentProof,
-      data: paymentProof.data,
-      contentType: paymentProof.contentType
+      url: fileUrl,
+      filename: req.file.filename
     });
   } catch (error) {
     console.error('Upload payment proof error:', error);

@@ -12,6 +12,8 @@ import { fileURLToPath } from 'url';
 import { apiLimiter, publicLimiter } from './middleware/rateLimit.middleware.js';
 // Import error handler
 import { errorHandler, notFound } from './middleware/error.middleware.js';
+// Import sanitization middleware
+import { sanitizationMiddleware } from './middleware/sanitization.middleware.js';
 
 // Import routes
 import authRoutes from './routes/auth.routes.js';
@@ -52,7 +54,8 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
-  contentSecurityPolicy: false
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 app.use(morgan('dev'));
 
@@ -61,15 +64,16 @@ const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps, Postman, or Google OAuth)
     if (!origin) return callback(null, true);
-    
+
     const allowedOrigins = [
       process.env.FRONTEND_URL || 'http://localhost:3000',
       'http://localhost:3000',
+      'http://localhost:3001', // Admin dashboard
       'https://accounts.google.com',
       'https://*.googleapis.com',
       'https://*.google.com'
     ];
-    
+
     // Check if origin is allowed
     if (allowedOrigins.some(allowed => {
       if (allowed.includes('*')) {
@@ -112,8 +116,17 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
-// Serve static files (uploads)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Global sanitization to prevent XSS and NoSQL injection
+app.use(sanitizationMiddleware);
+
+// Serve static files (uploads) with CORS headers
+app.use('/uploads', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.join(__dirname, 'uploads')));
 
 // Health check endpoint (no rate limiting)
 app.get('/health', (req, res) => {
@@ -142,6 +155,7 @@ app.use('/api/customer-reviews', apiLimiter, reviewRoutes);
 app.use('/api/admin', apiLimiter, adminRoutes);
 app.use('/api/upload', apiLimiter, uploadRoutes);
 
+
 // Error handling middleware (must be after routes)
 app.use(errorHandler);
 
@@ -164,7 +178,7 @@ const connectDB = async () => {
 // Start server (with or without MongoDB for development)
 const startServer = async () => {
   const dbConnected = await connectDB();
-  
+
   app.listen(PORT, () => {
     console.log(`🚀 Server is running on port ${PORT}`);
     console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
