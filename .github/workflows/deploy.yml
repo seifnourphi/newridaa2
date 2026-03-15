@@ -57,8 +57,13 @@ jobs:
 
             cd "$DEPLOY_PATH"
 
-            # Write env file from secret
-            printf "%s" "$ENV_FILE" > .env
+            # Write env file from secret safely using heredoc
+            cat > .env << 'ENV_EOF'
+            ${{ env.ENV_FILE }}
+            ENV_EOF
+
+            # Dynamically fix MONGODB_URI to use the correct container name for this environment
+            sed -i "s/mongodb:\/\/mongo:27017/mongodb:\/\/ridaa-mongo-${PORT}:27017/g" .env
 
             # Generate docker-compose override using printf to avoid heredoc indentation issues
             printf "services:\n  api:\n    container_name: %s\n    ports:\n      - \"%s:5000\"\n  mongo:\n    container_name: ridaa-mongo-%s\n    volumes:\n      - %s:/data/db\nvolumes:\n  %s:\n" \
