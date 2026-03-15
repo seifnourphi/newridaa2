@@ -18,14 +18,14 @@ jobs:
         run: |
           if [ "${{ github.ref_name }}" = "master" ]; then
             echo "DEPLOY_PATH=/var/www/ridaa-master" >> $GITHUB_OUTPUT
-            echo "ENV_FILE_CONTENT=${{ secrets.master_ENV_FILE }}" >> $GITHUB_OUTPUT
             echo "CONTAINER_NAME=ridaa-backend-prod" >> $GITHUB_OUTPUT
             echo "PORT=5002" >> $GITHUB_OUTPUT
+            echo "MONGO_VOLUME=ridaa-mongo-master" >> $GITHUB_OUTPUT
           else
             echo "DEPLOY_PATH=/var/www/ridaa-staging" >> $GITHUB_OUTPUT
-            echo "ENV_FILE_CONTENT=${{ secrets.STAGING_ENV_FILE }}" >> $GITHUB_OUTPUT
             echo "CONTAINER_NAME=ridaa-backend-staging" >> $GITHUB_OUTPUT
             echo "PORT=5001" >> $GITHUB_OUTPUT
+            echo "MONGO_VOLUME=ridaa-mongo-staging" >> $GITHUB_OUTPUT
           fi
 
       - name: Copy files via SSH
@@ -37,21 +37,46 @@ jobs:
           source: "."
           target: ${{ steps.vars.outputs.DEPLOY_PATH }}
           rm: true
-          exclude: "node_modules, .git, .github, .env"
+          exclude: "node_modules,.git,.github,.env"
 
       - name: SSH into server and deploy
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          ENV_FILE: ${{ github.ref_name == 'master' && secrets.master_ENV_FILE || secrets.STAGING_ENV_FILE }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: ENV_FILE
           script: |
-            cd ${{ steps.vars.outputs.DEPLOY_PATH }}
-            echo "${{ steps.vars.outputs.ENV_FILE_CONTENT }}" > .env
-            
-            # Update docker-compose with dynamic values if needed, or just run it
-            # Using sed to update port and container name to avoid conflicts between staging and prod
-            sed -i "s/container_name: ridaa-backend/container_name: ${{ steps.vars.outputs.CONTAINER_NAME }}/g" docker-compose.yml
-            sed -i "s/\"5001:5000\"/\"${{ steps.vars.outputs.PORT }}:5000\"/g" docker-compose.yml
-            
-            docker-compose up --build -d
+            set -e
+            DEPLOY_PATH="${{ steps.vars.outputs.DEPLOY_PATH }}"
+            CONTAINER_NAME="${{ steps.vars.outputs.CONTAINER_NAME }}"
+            PORT="${{ steps.vars.outputs.PORT }}"
+            MONGO_VOLUME="${{ steps.vars.outputs.MONGO_VOLUME }}"
+
+            cd "$DEPLOY_PATH"
+
+            # Write env file from secret
+            printf "%s" "$ENV_FILE" > .env
+
+            # Generate docker-compose override for this environment
+            cat > docker-compose.override.yml << EOF
+            services:
+              api:
+                container_name: ${CONTAINER_NAME}
+                ports:
+                  - "${PORT}:5000"
+              mongo:
+                container_name: ridaa-mongo-${PORT}
+                volumes:
+                  - ${MONGO_VOLUME}:/data/db
+            volumes:
+              ${MONGO_VOLUME}:
+            EOF
+
+            # Stop and remove old containers cleanly to avoid ContainerConfig issues
+            docker compose -f docker-compose.yml -f docker-compose.override.yml down --remove-orphans || true
+
+            # Start fresh
+            docker compose -f docker-compose.yml -f docker-compose.override.yml up --build -d
