@@ -1,0 +1,57 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - production
+      - staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set environment specific variables
+        id: vars
+        run: |
+          if [ "${{ github.ref_name }}" = "production" ]; then
+            echo "DEPLOY_PATH=/var/www/ridaa-production" >> $GITHUB_OUTPUT
+            echo "ENV_FILE_CONTENT=${{ secrets.PRODUCTION_ENV_FILE }}" >> $GITHUB_OUTPUT
+            echo "CONTAINER_NAME=ridaa-backend-prod" >> $GITHUB_OUTPUT
+            echo "PORT=5002" >> $GITHUB_OUTPUT
+          else
+            echo "DEPLOY_PATH=/var/www/ridaa-staging" >> $GITHUB_OUTPUT
+            echo "ENV_FILE_CONTENT=${{ secrets.STAGING_ENV_FILE }}" >> $GITHUB_OUTPUT
+            echo "CONTAINER_NAME=ridaa-backend-staging" >> $GITHUB_OUTPUT
+            echo "PORT=5001" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Copy files via SSH
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "."
+          target: ${{ steps.vars.outputs.DEPLOY_PATH }}
+          rm: true
+          exclude: "node_modules, .git, .github, .env"
+
+      - name: SSH into server and deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ${{ steps.vars.outputs.DEPLOY_PATH }}
+            echo "${{ steps.vars.outputs.ENV_FILE_CONTENT }}" > .env
+            
+            # Update docker-compose with dynamic values if needed, or just run it
+            # Using sed to update port and container name to avoid conflicts between staging and prod
+            sed -i "s/container_name: ridaa-backend/container_name: ${{ steps.vars.outputs.CONTAINER_NAME }}/g" docker-compose.yml
+            sed -i "s/\"5001:5000\"/\"${{ steps.vars.outputs.PORT }}:5000\"/g" docker-compose.yml
+            
+            docker-compose up --build -d
