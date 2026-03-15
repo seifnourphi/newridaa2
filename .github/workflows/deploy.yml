@@ -60,20 +60,10 @@ jobs:
             # Write env file from secret
             printf "%s" "$ENV_FILE" > .env
 
-            # Generate docker-compose override for this environment (no leading spaces in heredoc)
-            cat > docker-compose.override.yml << HEREDOC
-            services:
-              api:
-                container_name: $CONTAINER_NAME
-                ports:
-                  - "$PORT:5000"
-              mongo:
-                container_name: ridaa-mongo-$PORT
-                volumes:
-                  - $MONGO_VOLUME:/data/db
-            volumes:
-              $MONGO_VOLUME:
-            HEREDOC
+            # Generate docker-compose override using printf to avoid heredoc indentation issues
+            printf "services:\n  api:\n    container_name: %s\n    ports:\n      - \"%s:5000\"\n  mongo:\n    container_name: ridaa-mongo-%s\n    volumes:\n      - %s:/data/db\nvolumes:\n  %s:\n" \
+              "$CONTAINER_NAME" "$PORT" "$PORT" "$MONGO_VOLUME" "$MONGO_VOLUME" \
+              > docker-compose.override.yml
 
             # Stop and remove old containers cleanly to avoid ContainerConfig issues
             /usr/local/bin/docker-compose -f docker-compose.yml -f docker-compose.override.yml down --remove-orphans || true
