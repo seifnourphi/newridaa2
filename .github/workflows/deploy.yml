@@ -42,7 +42,7 @@ jobs:
       - name: SSH into server and deploy
         uses: appleboy/ssh-action@v1.0.3
         env:
-          ENV_FILE: ${{ github.ref_name == 'master' && secrets.master_ENV_FILE || secrets.STAGING_ENV_FILE }}
+          ENV_FILE: ${{ github.ref_name == 'master' && secrets.BACKEND_MASTER_ENV_FILE || secrets.BACKEND_STAGING_ENV_FILE }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -57,18 +57,24 @@ jobs:
 
             cd "$DEPLOY_PATH"
 
-            # Write env file from secret safely using heredoc
-            cat > .env << 'ENV_EOF'
-            ${{ env.ENV_FILE }}
-            ENV_EOF
+            # Write env file safely
+            echo "${{ env.ENV_FILE }}" > .env
 
             # Dynamically fix MONGODB_URI to use the correct container name for this environment
             sed -i "s/mongodb:\/\/mongo:27017/mongodb:\/\/ridaa-mongo-${PORT}:27017/g" .env
 
-            # Generate docker-compose override using printf to avoid heredoc indentation issues
-            printf "services:\n  api:\n    container_name: %s\n    ports:\n      - \"%s:5000\"\n  mongo:\n    container_name: ridaa-mongo-%s\n    volumes:\n      - %s:/data/db\nvolumes:\n  %s:\n" \
-              "$CONTAINER_NAME" "$PORT" "$PORT" "$MONGO_VOLUME" "$MONGO_VOLUME" \
-              > docker-compose.override.yml
+            # Generate docker-compose override
+            echo "services:" > docker-compose.override.yml
+            echo "  api:" >> docker-compose.override.yml
+            echo "    container_name: $CONTAINER_NAME" >> docker-compose.override.yml
+            echo "    ports:" >> docker-compose.override.yml
+            echo "      - \"$PORT:5000\"" >> docker-compose.override.yml
+            echo "  mongo:" >> docker-compose.override.yml
+            echo "    container_name: ridaa-mongo-$PORT" >> docker-compose.override.yml
+            echo "    volumes:" >> docker-compose.override.yml
+            echo "      - $MONGO_VOLUME:/data/db" >> docker-compose.override.yml
+            echo "volumes:" >> docker-compose.override.yml
+            echo "  $MONGO_VOLUME:" >> docker-compose.override.yml
 
             # Stop and remove old containers cleanly to avoid ContainerConfig issues
             /usr/local/bin/docker-compose -f docker-compose.yml -f docker-compose.override.yml down --remove-orphans || true
