@@ -57,8 +57,12 @@ jobs:
 
             cd "$DEPLOY_PATH"
 
-            # Write env file safely
-            printf "%s" "$ENV_FILE" > .env
+            # Write env file safely with diagnostic check
+            if [ -z "$ENV_FILE" ]; then
+              echo "DEBUG_SECRET_STATUS=MISSING_OR_EMPTY" > .env
+            else
+              echo "$ENV_FILE" > .env
+            fi
 
             # Dynamically fix MONGODB_URI to use the correct container name for this environment
             sed -i "s/mongodb:\/\/mongo:27017/mongodb:\/\/ridaa-mongo-${PORT}:27017/g" .env
