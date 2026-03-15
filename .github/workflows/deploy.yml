@@ -42,7 +42,7 @@ jobs:
       - name: SSH into server and deploy
         uses: appleboy/ssh-action@v1.0.3
         env:
-          ENV_FILE: ${{ github.ref_name == 'master' && secrets.BACKEND_MASTER_ENV_FILE || secrets.BACKEND_STAGING_ENV_FILE }}
+          ENV_FILE: ${{ github.ref_name == 'master' && secrets.master_ENV_FILE || secrets.STAGING_ENV_FILE }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
