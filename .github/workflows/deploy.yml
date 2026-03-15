@@ -58,7 +58,7 @@ jobs:
             cd "$DEPLOY_PATH"
 
             # Write env file safely
-            echo "${{ env.ENV_FILE }}" > .env
+            printf "%s" "$ENV_FILE" > .env
 
             # Dynamically fix MONGODB_URI to use the correct container name for this environment
             sed -i "s/mongodb:\/\/mongo:27017/mongodb:\/\/ridaa-mongo-${PORT}:27017/g" .env
