@@ -90,7 +90,7 @@ export const adminLogin = async (req, res) => {
     // Set httpOnly cookie
     res.cookie('adminToken', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: false, // process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 1000 // 1 hour
